@@ -1,7 +1,7 @@
 Glass-IntentTunnel
 ==================
 
-Very unpolished at this point, but prrof of concept is working.
+Very unpolished at this point, but proof of concept is working.
 
 
 Tunnel Intents over bluetooth.  
