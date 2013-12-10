@@ -1,0 +1,355 @@
+package ktlab.lib.connection;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.ByteOrder;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.concurrent.TimeoutException;
+
+import android.os.Handler;
+import android.os.Message;
+import android.util.Log;
+
+public abstract class Connection extends Handler {
+
+    private static final String TAG = "Connection";
+
+    // Event
+    public static final int EVENT_CONNECT_COMPLETE = 1;
+    public static final int EVENT_DATA_RECEIVED = 2;
+    public static final int EVENT_DATA_SEND_COMPLETE = 3;
+    public static final int EVENT_CONNECT_PING = 4;
+    public static final int EVENT_CONNECTION_FAIL = 101;
+
+    private static final long PING_INTERVAL = 500;
+    private static final long PING_LATE_TIME = 2000;
+    private static final long PING_WORRY_TIME = 1000;
+
+    // Event
+    private static byte PING = Byte.MAX_VALUE;
+    private static int PING_ID = Integer.MAX_VALUE;
+
+    protected ConnectionCallback mCallback;
+
+    // communication thread
+    protected ConnectionThread mConnectionThread;
+    protected CommandReceiveThread mReceiveThread;
+    protected CommandSendThread mSendThread;
+
+    // stream
+    protected InputStream mInput;
+    protected OutputStream mOutput;
+
+    // send/close flag
+    private boolean isSending = false;
+    private boolean forceStop = false;
+
+    // send data queue
+    private final boolean canQueueing;
+    private Queue<PendingData> mQueue = null;
+    private final ByteOrder mOrder;
+
+    // ping
+    private long mLastActivity;
+    private boolean hasOpenConnection = false;
+
+    @Override
+    public void handleMessage(Message msg) {
+
+        if (forceStop) {
+            mConnectionThread.close();
+            return;
+        }
+
+        switch (msg.what) {
+            case EVENT_CONNECT_COMPLETE:
+                Log.i(TAG, "connect complete");
+                mInput = mConnectionThread.getInputStream();
+                mOutput = mConnectionThread.getOutputStream();
+                //mCallback.onConnectComplete();
+
+                // receive thread starting
+                mReceiveThread = new CommandReceiveThread(mInput, obtainMessage(EVENT_DATA_RECEIVED),
+                        mOrder);
+                mReceiveThread.start();
+
+                mLastActivity = System.currentTimeMillis();
+                sendEmptyMessageDelayed(EVENT_CONNECT_PING, PING_LATE_TIME);
+
+                // if queueing data exists, send first data
+                sendPendingData();
+
+                break;
+
+            case EVENT_DATA_RECEIVED:
+                Log.i(TAG, "data received");
+                mLastActivity = System.currentTimeMillis();
+
+                if ( !hasOpenConnection) {
+                    hasOpenConnection = true;
+                    mCallback.onConnectComplete();
+                }
+
+                ConnectionCommand cmd = (ConnectionCommand) msg.obj;
+                if (cmd.type == PING) {
+                    Log.v(TAG, "data received: ping");
+                } else {
+                    mCallback.onCommandReceived(cmd);
+                }
+
+                // receive thread starting
+                mReceiveThread = null;
+                mReceiveThread = new CommandReceiveThread(mInput, obtainMessage(EVENT_DATA_RECEIVED),
+                        mOrder);
+                mReceiveThread.start();
+
+                break;
+
+            case EVENT_DATA_SEND_COMPLETE:
+                int id = msg.arg1;
+
+                if( id != PING_ID ) {
+                    Log.i(TAG, "data send complete, id : " + id);
+                } else {
+                    Log.v(TAG, "data send complete, id : " + id);
+                }
+
+                mSendThread = null;
+                isSending = false;
+
+                mLastActivity = System.currentTimeMillis();
+                if ( !hasOpenConnection) {
+                    hasOpenConnection = true;
+                    mCallback.onConnectComplete();
+                }
+
+                if (id != PING_ID) {
+                    mCallback.onDataSendComplete(id);
+                } else {
+                    Log.v(TAG, "send complete: ping");
+                }
+
+                // if queueing data exists, send first data
+                sendPendingData();
+
+                break;
+
+            case EVENT_CONNECT_PING:
+                Log.v(TAG, "connect ping");
+                try {
+                    mInput.available();
+                    mOutput.flush();
+
+                    long timeSinceActivity = System.currentTimeMillis() - mLastActivity;
+                    if (timeSinceActivity > PING_LATE_TIME) {
+                        throw new TimeoutException("late ping");
+                    } else if ( !isSending && mQueue.size() == 0 && timeSinceActivity > PING_WORRY_TIME ) {
+                        sendData(PING, PING_ID);
+                    }
+                    sendEmptyMessageDelayed(EVENT_CONNECT_PING, PING_INTERVAL);
+                } catch (Exception e) {
+                    Log.e(TAG, "connection lost", e);
+                    mCallback.onConnectionLost();
+                }
+                break;
+
+            case EVENT_CONNECTION_FAIL:
+                mSendThread = null;
+                isSending = false;
+                if ( !hasOpenConnection) {
+                    Log.e(TAG, "connection failed");
+                    mCallback.onConnectionFailed();
+                    break;
+                } else {
+                    Log.e(TAG, "connection lost");
+                    mCallback.onConnectionLost();
+                }
+                break;
+
+            default:
+                Log.e(TAG, "Unknown Event:" + msg.what);
+        }
+    }
+
+    /**
+     * Constructor
+     *
+     * @param cb          callback for communication result
+     * @param canQueueing true if can queue sending data
+     * @param order       byte order of the destination
+     */
+    protected Connection(ConnectionCallback cb, boolean canQueueing, ByteOrder order) {
+        mCallback = cb;
+
+        this.canQueueing = canQueueing;
+        this.mQueue = new LinkedList<PendingData>();
+
+        mOrder = order;
+    }
+
+    /**
+     * stop connection. this method must be called when application will stop
+     * connection
+     */
+    public void stopConnection() {
+        forceStop = true;
+
+        // stop connection thread
+        mConnectionThread.close();
+
+        // stop receive thread
+        if (mReceiveThread != null) {
+            mReceiveThread.forceStop();
+            mReceiveThread = null;
+        }
+
+        // stop send thread
+        mSendThread = null;
+        clearQueuedData();
+
+        mInput = null;
+        mOutput = null;
+        hasOpenConnection = false;
+    }
+
+    /**
+     * @param type command type
+     * @param data option data
+     * @param id   send id
+     * @return return true if success sending or queueing data. if "canQueueing"
+     * is false and sending any data, return false.
+     */
+    public boolean sendData(byte type, byte[] data, int id) {
+
+        // if sending data, queueing...
+        if (isSending || !hasOpenConnection) {
+            if (canQueueing || !hasOpenConnection || type == PING) {
+                synchronized (mQueue) {
+                    PendingData p = new PendingData(id, new ConnectionCommand(type, data));
+                    mQueue.offer(p);
+                }
+                Log.i(TAG, "sendData(), pending...");
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        msg.arg1 = id;
+        ConnectionCommand command = new ConnectionCommand(type, data);
+        mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        mSendThread.start();
+
+        isSending = true;
+        return true;
+    }
+
+    /**
+     * @param type command type
+     * @param id   send id
+     * @return return true if success sending or queueing data. if "canQueueing"
+     * is false and sending any data, return false.
+     */
+    public boolean sendData(byte type, int id) {
+
+        // if sending data, queueing...
+        if (isSending || !hasOpenConnection) {
+            if (canQueueing || !hasOpenConnection || type == PING ) {
+                synchronized (mQueue) {
+                    PendingData p = new PendingData(id, new ConnectionCommand(type));
+                    mQueue.offer(p);
+                }
+                Log.i(TAG, "sendData(), pending...");
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        msg.arg1 = id;
+        ConnectionCommand command = new ConnectionCommand(type);
+        mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        mSendThread.start();
+
+        isSending = true;
+        return true;
+    }
+
+    /**
+     * send data internal.
+     *
+     * @param pendingData pending data
+     * @return always true
+     * @hide
+     */
+    private boolean sendData(PendingData pendingData) {
+
+        Log.i(TAG, "send PendingData");
+        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        msg.arg1 = pendingData.id;
+
+        mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
+        mSendThread.start();
+
+        isSending = true;
+        return true;
+    }
+
+    /**
+     * send pending data if exists.
+     *
+     * @hide
+     */
+    private void sendPendingData() {
+        PendingData pendingData = null;
+        synchronized (mQueue) {
+            if (mQueue.size() > 0) {
+                pendingData = mQueue.poll();
+            }
+        }
+        if (pendingData != null) {
+            sendData(pendingData);
+        }
+    }
+
+    /**
+     * clear queue data
+     *
+     * @hide
+     */
+    private void clearQueuedData() {
+        synchronized (mQueue) {
+            mQueue.clear();
+        }
+    }
+
+    /**
+     * pending data
+     *
+     * @hide
+     */
+    private class PendingData {
+        int id;
+        ConnectionCommand command;
+
+        PendingData(int id, ConnectionCommand command) {
+            this.id = id;
+            this.command = command;
+        }
+    }
+
+    public boolean isSending() {
+        return isSending;
+    }
+
+    public boolean hasPending() {
+        synchronized (mQueue) {
+            return mQueue.size() > 0 ;
+        }
+    }
+
+    abstract public void startConnection();
+}
