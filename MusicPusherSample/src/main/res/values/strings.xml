@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">IntentTunnel</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="voice_start_music">phone music</string>
+    <string name="voice_start_music_play">phone music play</string>
+    <string name="voice_start_music_pause">phone music pause</string>
+    <string name="voice_start_music_next">phone music next</string>
+    <string name="voice_start_music_previous">phone music back</string>
+
+</resources>

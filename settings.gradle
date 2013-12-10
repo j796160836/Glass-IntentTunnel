@@ -1,1 +1,1 @@
-include 'BluetoothLib', 'GlassServer', 'Common', 'PhoneClient', 'AndroidTunnel', 'GlassTunnel'
+include 'BluetoothLib', 'Common', 'AndroidTunnel', 'GlassTunnel', 'MusicPusherSample'
