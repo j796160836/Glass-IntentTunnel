@@ -12,3 +12,6 @@ Install AndroidTunnel to your phone.  Run the IntentTunnel app, press menu to st
 
 Install MusicPusherSample on Glass.  Say "phome music start" or "phone music stop".
 The MusicPusherSample sends "com.android.music.musicservicecommand" intents to the service to have them broadcasted on the phone.  Most music players on the phone respond to these intent allowing control of them.
+
+
+Thanks to https://github.com/KTlab/BluetoothCommunicationLibrary_Android for providing a solid bluetooth library to work off of.
