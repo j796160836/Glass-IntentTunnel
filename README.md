@@ -5,8 +5,8 @@ Tunnel Intents over bluetooth
 
 
 
-Install GlassTunnel to Glass.  Run the IntentTunnel app to start the tunnel
+Install GlassTunnel to Glass.  Run the IntentTunnel app to start the tunnel (It's in the voice menu)
 
-Install AndroidTunnel to your phone.  Run the IntentTunnel app to start the tunnel
+Install AndroidTunnel to your phone.  Run the IntentTunnel app, press menu to start the tunnel
 
-Bind to the RouterService to start sending intents.
+Install MusicPusherSample.  Say "phome music start" or "phone music stop".  
