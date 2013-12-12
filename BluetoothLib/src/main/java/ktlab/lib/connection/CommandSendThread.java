@@ -14,10 +14,9 @@ public class CommandSendThread extends Thread {
     private ConnectionCommand mCommand;
     private ByteOrder mOrder;
 
-    public CommandSendThread(OutputStream out, ConnectionCommand command,
-            Message msg, ByteOrder order) {
+    public CommandSendThread(OutputStream out, Message msg, ByteOrder order) {
         mOut = out;
-        mCommand = command;
+        mCommand = (ConnectionCommand) msg.obj;
         mMessage = msg;
         mOrder = order;
     }

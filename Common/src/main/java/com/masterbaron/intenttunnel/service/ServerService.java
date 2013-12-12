@@ -8,9 +8,11 @@ import android.util.Log;
 import com.masterbaron.intenttunnel.R;
 
 import java.net.URISyntaxException;
+import java.util.Queue;
 import java.util.UUID;
 
 import ktlab.lib.connection.ConnectionCommand;
+import ktlab.lib.connection.PendingData;
 import ktlab.lib.connection.bluetooth.BluetoothConnection;
 import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
 
@@ -34,14 +36,14 @@ public class ServerService extends BluetoothService{
     }
 
     @Override
-    public void onConnectionLost() {
-        super.onConnectionLost();
+    public void onConnectionLost(Queue<PendingData> left) {
+        super.onConnectionLost(left);
         startConnection();
     }
 
     @Override
-    public void onConnectionFailed() {
-        super.onConnectionLost();
+    public void onConnectionFailed(Queue<PendingData> left) {
+        super.onConnectionFailed(left);
 
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
         if ( defaultAdapter != null && defaultAdapter.isEnabled() ) {

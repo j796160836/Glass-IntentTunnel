@@ -73,7 +73,7 @@ public class MusicActivity extends Activity {
         Log.d("MusicPusher", action.toUri(Intent.URI_INTENT_SCHEME));
         //Log.d("MusicPusher", "service=" + startService(push));
 
-        mService.send(Message.obtain(null, 0, action));
+        mService.send(Message.obtain(null, 1000, action));
     }
 
     /**

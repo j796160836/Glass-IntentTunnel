@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import android.os.Message;
+import android.util.Log;
 
 public class CommandReceiveThread extends Thread {
 
@@ -77,6 +78,8 @@ public class CommandReceiveThread extends Thread {
 
         ConnectionCommand command = ConnectionCommand.fromHeaderAndOption(
                 rawHeader, rawOption, mOrder);
+
+        Log.v("CommandReceiverThread", "CommandReceiveThread=" + mMessage.what);
         mMessage.obj = command;
         mMessage.sendToTarget();
     }

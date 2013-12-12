@@ -22,9 +22,9 @@ public abstract class Connection extends Handler {
     public static final int EVENT_CONNECT_PING = 4;
     public static final int EVENT_CONNECTION_FAIL = 101;
 
-    private static final long PING_INTERVAL = 500;
-    private static final long PING_LATE_TIME = 2000;
-    private static final long PING_WORRY_TIME = 1000;
+    private static final long PING_INTERVAL = 1000;
+    private static final long PING_LATE_TIME = 4000;
+    private static final long PING_WORRY_TIME = 3000;
 
     // Event
     private static byte PING = Byte.MAX_VALUE;
@@ -75,7 +75,7 @@ public abstract class Connection extends Handler {
                 mReceiveThread.start();
 
                 mLastActivity = System.currentTimeMillis();
-                sendEmptyMessageDelayed(EVENT_CONNECT_PING, PING_LATE_TIME);
+                sendEmptyMessageDelayed(EVENT_CONNECT_PING, PING_INTERVAL);
 
                 // if queueing data exists, send first data
                 sendPendingData();
@@ -138,38 +138,57 @@ public abstract class Connection extends Handler {
             case EVENT_CONNECT_PING:
                 Log.v(TAG, "connect ping");
                 try {
-                    mInput.available();
-                    mOutput.flush();
-
                     long timeSinceActivity = System.currentTimeMillis() - mLastActivity;
                     if (timeSinceActivity > PING_LATE_TIME) {
                         throw new TimeoutException("late ping");
                     } else if ( !isSending && mQueue.size() == 0 && timeSinceActivity > PING_WORRY_TIME ) {
+                        mInput.available();
+                        mOutput.flush();
                         sendData(PING, PING_ID);
                     }
                     sendEmptyMessageDelayed(EVENT_CONNECT_PING, PING_INTERVAL);
                 } catch (Exception e) {
-                    Log.e(TAG, "connection lost", e);
-                    mCallback.onConnectionLost();
+                    mSendThread = null;
+                    isSending = false;
+                    Queue<PendingData> left = getPendingDatas(msg);
+                    if ( !hasOpenConnection) {
+                        Log.e(TAG, "connection failed", e);
+                        mCallback.onConnectionFailed(left);
+                    } else {
+                        Log.e(TAG, "connection lost", e);
+                        mCallback.onConnectionLost(left);
+                    }
                 }
                 break;
 
             case EVENT_CONNECTION_FAIL:
                 mSendThread = null;
                 isSending = false;
+                Queue<PendingData> left = getPendingDatas(msg);
                 if ( !hasOpenConnection) {
                     Log.e(TAG, "connection failed");
-                    mCallback.onConnectionFailed();
+                    mCallback.onConnectionFailed(left);
                     break;
                 } else {
                     Log.e(TAG, "connection lost");
-                    mCallback.onConnectionLost();
+                    mCallback.onConnectionLost(left);
                 }
                 break;
 
             default:
                 Log.e(TAG, "Unknown Event:" + msg.what);
         }
+    }
+
+    private Queue<PendingData> getPendingDatas(Message msg) {
+        Queue<PendingData> left = new LinkedList<PendingData>();
+        left.add(new PendingData(msg.arg1, (ConnectionCommand)msg.obj));
+        for ( PendingData data : mQueue ) {
+            if ( data.id != PING_ID ) {
+                left.add(data);
+            }
+        }
+        return left;
     }
 
     /**
@@ -213,6 +232,10 @@ public abstract class Connection extends Handler {
         hasOpenConnection = false;
     }
 
+    public boolean resendData(PendingData data) {
+        return sendData(data.getCommand().type, data.getCommand().option, data.getId());
+    }
+
     /**
      * @param type command type
      * @param data option data
@@ -224,7 +247,7 @@ public abstract class Connection extends Handler {
 
         // if sending data, queueing...
         if (isSending || !hasOpenConnection) {
-            if (canQueueing || !hasOpenConnection || type == PING) {
+            if (canQueueing && ( !hasOpenConnection && type != PING)) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type, data));
                     mQueue.offer(p);
@@ -238,8 +261,8 @@ public abstract class Connection extends Handler {
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
-        ConnectionCommand command = new ConnectionCommand(type, data);
-        mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        msg.obj = new ConnectionCommand(type, data);
+        mSendThread = new CommandSendThread(mOutput, msg, mOrder);
         mSendThread.start();
 
         isSending = true;
@@ -256,7 +279,7 @@ public abstract class Connection extends Handler {
 
         // if sending data, queueing...
         if (isSending || !hasOpenConnection) {
-            if (canQueueing || !hasOpenConnection || type == PING ) {
+            if (canQueueing && ( !hasOpenConnection && type != PING)) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type));
                     mQueue.offer(p);
@@ -270,8 +293,10 @@ public abstract class Connection extends Handler {
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
-        ConnectionCommand command = new ConnectionCommand(type);
-        mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        msg.obj = new ConnectionCommand(type);
+
+        Log.v(TAG, "sendData(" + id +")");
+        mSendThread = new CommandSendThread(mOutput, msg, mOrder);
         mSendThread.start();
 
         isSending = true;
@@ -290,8 +315,8 @@ public abstract class Connection extends Handler {
         Log.i(TAG, "send PendingData");
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = pendingData.id;
-
-        mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
+        msg.obj = pendingData.command;
+        mSendThread = new CommandSendThread(mOutput, msg, mOrder);
         mSendThread.start();
 
         isSending = true;
@@ -323,21 +348,6 @@ public abstract class Connection extends Handler {
     private void clearQueuedData() {
         synchronized (mQueue) {
             mQueue.clear();
-        }
-    }
-
-    /**
-     * pending data
-     *
-     * @hide
-     */
-    private class PendingData {
-        int id;
-        ConnectionCommand command;
-
-        PendingData(int id, ConnectionCommand command) {
-            this.id = id;
-            this.command = command;
         }
     }
 

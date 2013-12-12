@@ -70,6 +70,12 @@ public class GlassConfigureActivity extends Activity {
     }
 
     @Override
+    public void onContextMenuClosed(Menu menu) {
+        textView.setText("onContextMenuClosed()");
+        this.finish();
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle item selection.
         switch (item.getItemId()) {

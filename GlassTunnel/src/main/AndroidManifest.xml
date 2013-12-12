@@ -20,13 +20,11 @@
 
         <activity
             android:name=".glass.GlassConfigureActivity"
-            android:label="Config">
+            android:label="IntentTunnel">
             <intent-filter>
-                <action android:name="com.google.android.glass.action.VOICE_TRIGGER" />
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <meta-data
-                android:name="com.google.android.glass.VoiceTrigger"
-                android:resource="@xml/voice_trigger_start" />
         </activity>
 
     </application>
