@@ -6,7 +6,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -27,15 +26,14 @@ import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
  * Created by Van Etten on 12/6/13.
  */
 public abstract class BluetoothService extends Service implements ConnectionCallback, Handler.Callback {
-    private static String SERVICE_PREFERENCES = "ServerPreferences";
-    private static String SERVICE_PREFERENCE_START_ON_BOOT = "StartOnBoot";
+    protected static byte BLUETOOTH_COMMAND_PASS_INTENT = 100;
 
-    protected static byte COMMAND_PASS_INTENT = 100;
+    protected static int failedRetries = 0;
 
     protected Handler mHandler;
     protected BluetoothConnection mBTConnection;
+    protected Messenger mRouterService;
 
-    private Messenger mRouterService;
     private Messenger mMessenger;
     private String mStatus = "Stopped";
     private boolean isRunning = true;
@@ -43,9 +41,34 @@ public abstract class BluetoothService extends Service implements ConnectionCall
     private long lastActivity = 0;
     private boolean bound = false;
     private int mMessageId = 0;
-    private Map<Integer, String> mReplyMap = new HashMap<Integer, String>();
+
+    /**
+     * stop the ServerService
+     */
+    public static void stopServices(Context context) {
+        context.stopService(new Intent(context, ServerService.class));
+    }
+
+    /**
+     * start the ServerService
+     */
+    public static void startServices(Context context) {
+        context.startService(new Intent(context, ServerService.class));
+    }
+
+    /**
+     * is the ServerService running
+     */
+    public static boolean areServicesRunning() {
+        return ServerService.isServiceRunning();
+    }
 
     abstract protected BluetoothConnection createNewBTConnection();
+
+    protected String getTag() {
+        // logs to belong to whoever implements this abstract class.
+        return ((Object) this).getClass().getSimpleName();
+    }
 
     public boolean isRunning() {
         return isRunning;
@@ -59,8 +82,12 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         return isConnected;
     }
 
-    protected String getTag() {
-        return ((Object) this).getClass().getSimpleName();
+    public boolean isBound() {
+        return bound;
+    }
+
+    public long getLastActivity() {
+        return lastActivity;
     }
 
     @Override
@@ -74,14 +101,10 @@ public abstract class BluetoothService extends Service implements ConnectionCall
     public void onCreate() {
         Log.d(getTag(), "onCreate()");
 
+        // if no bluetooth or off, then just stop since we cant do anything
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
         if (defaultAdapter == null || !defaultAdapter.isEnabled()) {
-            stopSelf();
-            return;
-        }
-
-        SharedPreferences config = getSharedPreferences(SERVICE_PREFERENCES, MODE_PRIVATE);
-        if (!config.getBoolean(SERVICE_PREFERENCE_START_ON_BOOT, false)) {
+            Log.d(getTag(), "bluetooth adapter disabled");
             stopSelf();
             return;
         }
@@ -89,13 +112,16 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         mStatus = "Starting";
         super.onCreate();
 
-        startConnection();
-        mMessenger = new Messenger(new Handler(this));
+        // setup handler and messenger
         mHandler = new Handler(this);
+        mMessenger = new Messenger(mHandler);
 
-        Intent in = new Intent(RouterService.class.getName());
-        in.setClassName("com.masterbaron.intenttunnel", "com.masterbaron.intenttunnel.service.RouterService");
+        // bind back to the router
+        Intent in = new Intent(BluetoothService.class.getName());
+        in.setClass(this, RouterService.class);
         bindService(in, mRouterConnection, Context.BIND_AUTO_CREATE);
+
+        startConnection();
     }
 
     @Override
@@ -125,6 +151,27 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         return super.onUnbind(intent);
     }
 
+    /**
+     * take and messages we haven't sent over bluetooth and send them back to the router.
+     */
+    private void backToRouter(Queue<PendingData> left) {
+        Log.e(getTag(), "reroute: " + left );
+        if (left != null) {
+            for (PendingData data : left) {
+                if (data.getCommand().type == RouterService.ROUTER_MESSAGE_FORWARD_INTENT) {
+                    try {
+                        byte[] bytes = data.getCommand().option;
+                        Intent intent = Intent.parseUri(new String(bytes), Intent.URI_INTENT_SCHEME);
+                        Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_FORWARD_INTENT, intent);
+                        mRouterService.send(msg);
+                    } catch (Exception e) {
+                        Log.e(getTag(), "failed to resend intent", e);
+                    }
+                }
+            }
+        }
+    }
+
     protected void stopConnection() {
         mStatus = "Disconnecting";
         if (mBTConnection != null) {
@@ -140,6 +187,7 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         mMessageId = 0;
         mBTConnection = createNewBTConnection();
         if (mBTConnection != null) {
+            // if this is a server, then we will be waiting for a connection
             if (mBTConnection instanceof ServerBluetoothConnection) {
                 mStatus = "Waiting for connection";
             }
@@ -147,6 +195,7 @@ public abstract class BluetoothService extends Service implements ConnectionCall
             mBTConnection.startConnection();
         } else {
             mStatus = "BT device failure";
+            stopSelf();
         }
     }
 
@@ -155,10 +204,17 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         Log.d(getTag(), "onConnectComplete()");
         mStatus = "Connected";
         isConnected = true;
-        trackAcitivty();
+
+        // once connected reset failure counter
+        failedRetries = 0;
+        trackBluetoothActivity();
     }
 
-    private void trackAcitivty() {
+    /**
+     * called when we detect bluetooth activity.
+     * used to determine idle timeout
+     */
+    private void trackBluetoothActivity() {
         lastActivity = System.currentTimeMillis();
     }
 
@@ -166,72 +222,47 @@ public abstract class BluetoothService extends Service implements ConnectionCall
     public void onConnectionFailed(Queue<PendingData> left) {
         Log.d(getTag(), "onConnectionFailed()");
         mStatus = "Connection Failed";
+
+        // count failures so we can give up at some point
+        failedRetries++;
+
         stopConnection();
+
+        // when there is a failure, we need to send all of the pending messages back to the router.
+        backToRouter(left);
     }
 
     @Override
     public void onConnectionLost(Queue<PendingData> left) {
         Log.d(getTag(), "onConnectionLost()");
         mStatus = "Connection Lost";
+
+        // count failures so we can give up at some point
+        failedRetries++;
+
         stopConnection();
+
+        // when there is a failure, we need to send all of the pending messages back to the router.
+        backToRouter(left);
     }
 
     @Override
     public void onDataSendComplete(int id) {
         Log.d(getTag(), "onDataSendComplete(" + id + ")");
         mStatus = "Sent Data";
-        trackAcitivty();
-
-        String result = mReplyMap.remove(id);
-        if (result != null) {
-            notifyResult(result, -1);
-        }
+        trackBluetoothActivity();
     }
 
     @Override
     public void onCommandReceived(ConnectionCommand command) {
         Log.d(getTag(), "onCommandReceived(" + command.type + ")");
         mStatus = "Received Data";
-        trackAcitivty();
+        trackBluetoothActivity();
     }
 
-    public boolean isBound() {
-        return bound;
-    }
-
-    private void notifyResult(String uri, int result) {
-        try {
-            Intent intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME);
-            intent.putExtra(Intent.EXTRA_INTENT + ":RESULT", result);
-            sendBroadcast(intent);
-        } catch (Exception e) {
-            Log.e(getTag(), "Invalid Intent.EXTRA_INTENT + \":RESULT\" provided", e);
-        }
-    }
-
-    public long getLastActivity() {
-        return lastActivity;
-    }
-
-    public static void setServiceOnBoot(Context context, boolean onBoot) {
-        SharedPreferences.Editor edit = context.getSharedPreferences(SERVICE_PREFERENCES, MODE_PRIVATE).edit();
-        edit.putBoolean(SERVICE_PREFERENCE_START_ON_BOOT, onBoot);
-        edit.commit();
-    }
-
-    public static void stopServices(Context context) {
-        context.stopService(new Intent(context, ClientService.class));
-        context.stopService(new Intent(context, ServerService.class));
-    }
-
-    public static void startServices(Context context) {
-        context.startService(new Intent(context, ServerService.class));
-    }
-
-    public static boolean areServicesRunning() {
-        return ClientService.isServiceRunning() || ServerService.isServiceRunning();
-    }
-
+    /**
+     * Handle all internal and external messages
+     */
     public boolean handleMessage(Message msg) {
         if (mRouterService == null) {
             Log.d(getTag(), "waiting for routerservice to bind");
@@ -241,19 +272,14 @@ public abstract class BluetoothService extends Service implements ConnectionCall
             msg.getTarget().sendMessageDelayed(msg, 100);
         } else {
             Log.d(getTag(), "act on what=" + msg.what);
-            if (msg.what == RouterService.INCOMING_MSG_INTENT_FORWARD) {
+            if (msg.what == RouterService.ROUTER_MESSAGE_FORWARD_INTENT) {
                 try {
                     mMessageId++;
                     Intent intent = (Intent) msg.obj;
                     String sendUri = intent.toUri(Intent.URI_INTENT_SCHEME);
-                    mBTConnection.sendData(COMMAND_PASS_INTENT, sendUri.getBytes(), mMessageId);
-
-                    String ifSentUri = intent.getStringExtra(Intent.EXTRA_INTENT + ":SENT");
-                    if (ifSentUri != null) {
-                        mReplyMap.put(mMessageId, ifSentUri);
-                    }
+                    mBTConnection.sendData(BLUETOOTH_COMMAND_PASS_INTENT, sendUri.getBytes(), mMessageId);
                 } catch (Exception e) {
-                    Log.e(getTag(), "failed to process INCOMING_MSG_INTENT_FORWARD", e);
+                    Log.e(getTag(), "failed to process ROUTER_MESSAGE_FORWARD_INTENT", e);
                 }
                 return true;
             }
@@ -261,6 +287,7 @@ public abstract class BluetoothService extends Service implements ConnectionCall
         return false;
     }
 
+    // track router binding.
     private ServiceConnection mRouterConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder service) {
             Log.d(getTag(), "onRouterServiceConnected()");

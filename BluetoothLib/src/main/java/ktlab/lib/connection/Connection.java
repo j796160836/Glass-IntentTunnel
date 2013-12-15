@@ -150,7 +150,7 @@ public abstract class Connection extends Handler {
                 } catch (Exception e) {
                     mSendThread = null;
                     isSending = false;
-                    Queue<PendingData> left = getPendingDatas(msg);
+                    Queue<PendingData> left = getPendingDatas(null);
                     if ( !hasOpenConnection) {
                         Log.e(TAG, "connection failed", e);
                         mCallback.onConnectionFailed(left);
@@ -182,7 +182,9 @@ public abstract class Connection extends Handler {
 
     private Queue<PendingData> getPendingDatas(Message msg) {
         Queue<PendingData> left = new LinkedList<PendingData>();
-        left.add(new PendingData(msg.arg1, (ConnectionCommand)msg.obj));
+        if( msg != null ) {
+            left.add(new PendingData(msg.arg1, (ConnectionCommand)msg.obj));
+        }
         for ( PendingData data : mQueue ) {
             if ( data.id != PING_ID ) {
                 left.add(data);

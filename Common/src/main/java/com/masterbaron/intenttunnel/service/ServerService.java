@@ -32,7 +32,7 @@ public class ServerService extends BluetoothService{
 
     @Override
     protected BluetoothConnection createNewBTConnection() {
-        return new ServerBluetoothConnection(UUID.fromString(getString(R.string.server_uuid)), this, true);
+        return new ServerBluetoothConnection(UUID.fromString(getString(R.string.bluetooth_uuid)), this, true);
     }
 
     @Override
@@ -54,7 +54,7 @@ public class ServerService extends BluetoothService{
     @Override
     public void onCommandReceived(ConnectionCommand command) {
         super.onCommandReceived(command);
-        if ( command.type == COMMAND_PASS_INTENT) {
+        if ( command.type == BLUETOOTH_COMMAND_PASS_INTENT) {
             broadcast(command.option);
         }
     }

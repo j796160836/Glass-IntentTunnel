@@ -1,11 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <string name="app_name">IntentTunnel</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
-
-    <string name="client_uuid">00001105-0000-2000-8000-00321F9B34FB</string>
-    <string name="server_uuid">00001104-0000-1000-8000-00123F9B34FB</string>
-
 </resources>

@@ -67,7 +67,6 @@ public class PhoneConfigureActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.start:
-                BluetoothService.setServiceOnBoot(this, true);
                 BluetoothService.startServices(this);
                 ActivityCompat.invalidateOptionsMenu(this);
                 textView.postDelayed(new Runnable() {
@@ -78,7 +77,6 @@ public class PhoneConfigureActivity extends Activity {
                 }, 1000);
                 return true;
             case R.id.stop:
-                BluetoothService.setServiceOnBoot(this, false);
                 BluetoothService.stopServices(this);
                 textView.postDelayed(new Runnable() {
                     @Override

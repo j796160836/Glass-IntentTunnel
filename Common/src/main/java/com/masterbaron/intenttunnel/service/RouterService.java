@@ -9,34 +9,32 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
-import android.os.RemoteException;
 import android.util.Log;
 
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import ktlab.lib.connection.PendingData;
-
 /**
  * Created by Van Etten on 12/9/13.
  */
 public class RouterService extends Service {
     private static final String TAG = RouterService.class.getSimpleName();
-    protected static final int INCOMING_MSG_INTENT_FORWARD = 1000;
 
-    private static RouterService service;
+    protected static final int ROUTER_MESSAGE_FORWARD_INTENT = 1000;
+    protected static final int ROUTER_MESSAGE_CLIENT_FAILED = 1001;
 
     private final AtomicInteger binds = new AtomicInteger(0);
     private final Messenger mMessenger = new Messenger(new IncomingHandler());
-    private final Queue<Message> mSendMap = new LinkedList<Message>();
+    private final Queue<Message> mPendingMessages = new LinkedList<Message>();
     private Messenger mService = null;
+    private ServiceConnection mConnection = null;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        service = this;
 
+        // the ServerService should also always be running
         startService(new Intent(this, ServerService.class));
     }
 
@@ -47,80 +45,108 @@ public class RouterService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        if ( !RouterService.class.getName().equals(intent.getAction())) {
-            int i = binds.getAndIncrement();
-            if (i == 0) {
-                // first one
-                Log.d(TAG, "first onBind()");
-                Intent in = new Intent();
-                in.setClassName("com.masterbaron.intenttunnel", "com.masterbaron.intenttunnel.service.ClientService");
-                bindService(in, mConnection, Context.BIND_AUTO_CREATE);
-            } else {
-                Log.d(TAG, i + " binds so far onBind()");
-            }
+        // track binds except ones coming from ClientService and ServiceService
+        if ( !BluetoothService.class.getName().equals(intent.getAction())) {
+            int i = binds.incrementAndGet();
+            Log.d(TAG, i + " binds so far onBind()");
         }
         return mMessenger.getBinder();
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
-        if ( !RouterService.class.getName().equals(intent.getAction())) {
+        // track binds except ones coming from ClientService and ServiceService
+        if ( !BluetoothService.class.getName().equals(intent.getAction())) {
             int i = binds.decrementAndGet();
-            if (i == 0) {
-                // last one
-                Log.d(TAG, "last onUnbind()");
-                unbindService(mConnection);
-            } else {
-                Log.d(TAG, i + " binds left onUnbind()");
+            Log.d(TAG, i + " binds left onUnbind()");
+
+            if ( binds.get() == 0 && mPendingMessages.size() == 0 ) {
+                // no one left bound to the router and we don't have any pending messages
+                unBindClientService();
             }
         }
 
         return super.onUnbind(intent);
     }
 
-    private ServiceConnection mConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName className, IBinder service) {
-            Log.d(TAG, "onServiceConnected()");
-            mService = new Messenger(service);
+    /**
+     * bind to the client if we haven't already
+     * once bound, start sending messages to the ClientService
+     */
+    private void bindClientService() {
+        if( mConnection == null ) {
+            // setup the ClientService bind/unbind callback
+            mConnection = new ServiceConnection() {
+                public void onServiceConnected(ComponentName className, IBinder service) {
+                    Log.d(TAG, "onClientServiceConnected()");
+                    mService = new Messenger(service);
 
-            for ( Message msg : mSendMap ) {
-                try {
-                    Log.e(TAG, "sending queued message");
-                    Message routeMessage = Message.obtain();
-                    routeMessage.copyFrom(msg);
-                    mService.send(routeMessage);
-                } catch (Exception e) {
-                    Log.e(TAG, "Failed to route message", e);
+                    // not that we are bound, start sending pending messages
+                    for ( Message msg : mPendingMessages) {
+                        try {
+                            Log.e(TAG, "sending queued message: " + msg.what);
+                            Message routeMessage = Message.obtain();
+                            routeMessage.copyFrom(msg);
+                            mService.send(routeMessage);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Failed to route message", e);
+                        }
+                    }
+                    mPendingMessages.clear();
+
+                    if ( binds.get() == 0 ) {
+                        // All packets are sent, and no one bound to the router
+                        unBindClientService();
+                    }
                 }
-            }
-            mSendMap.clear();
-        }
 
-        public void onServiceDisconnected(ComponentName className) {
-            Log.e(TAG, "onServiceDisconnected()");
-            mService = null;
-        }
-    };
+                public void onServiceDisconnected(ComponentName className) {
+                    Log.e(TAG, "onClientServiceDisconnected()");
+                    mService = null;
+                }
+            };
 
-    static protected void resendIntent( Intent i ) {
-        Message msg = Message.obtain();
-        msg.obj = i;
-        try {
-            service.mMessenger.send(msg);
-        } catch (RemoteException e) {
-            Log.e(TAG, "Failed to route message", e);
+            // bind the ClientService
+            Log.d(TAG, "binding client service");
+            Intent in = new Intent();
+            in.setClass(RouterService.this, ClientService.class);
+            bindService(in, mConnection, Context.BIND_AUTO_CREATE);
         }
     }
 
+    /**
+     * unbind to the ClientService if we are connected
+     */
+    private void unBindClientService() {
+        if( mConnection != null ) {
+            unbindService(mConnection);
+            mConnection = null;
+        }
+    }
+
+    /**
+     * Handle all internal and external messages
+     */
     class IncomingHandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
-            if (msg.what == INCOMING_MSG_INTENT_FORWARD ) {
+            if (msg.what == ROUTER_MESSAGE_CLIENT_FAILED) {
+                //  restart the ClientService
+                unBindClientService();
+            } else if (msg.what == ROUTER_MESSAGE_FORWARD_INTENT) {
+                // make sure the ClientService is started
+                bindClientService();
+
                 if (mService == null) {
-                    mSendMap.add(msg);
+                    // we are not connected to the ClientService yet, lets queue this message
+                    Message routeMessage = Message.obtain();
+                    routeMessage.copyFrom(msg);
+                    Log.e(TAG, "service not ready, queued message: " + routeMessage.what);
+                    mPendingMessages.add(routeMessage);
                 } else {
+                    // ready to send the message to the ClientService
                     try {
-                        Log.e(TAG, "queued message");
+                        Log.e(TAG, "send message: " + msg.what);
                         Message routeMessage = Message.obtain();
                         routeMessage.copyFrom(msg);
                         mService.send(routeMessage);

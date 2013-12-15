@@ -80,7 +80,6 @@ public class GlassConfigureActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.start:
-                BluetoothService.setServiceOnBoot(this, true);
                 BluetoothService.startServices(this);
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
@@ -91,7 +90,6 @@ public class GlassConfigureActivity extends Activity {
                 }, 1000);
                 return true;
             case R.id.stop:
-                BluetoothService.setServiceOnBoot(this, false);
                 BluetoothService.stopServices(this);
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
