@@ -1,4 +1,4 @@
-package com.masterbaron.intenttunnel.service;
+package com.masterbaron.intenttunnel.router;
 
 import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
@@ -19,26 +19,27 @@ import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
 /**
  * Created by Van Etten on 12/2/13.
  */
-public class ServerService extends BluetoothService{
+public class ServerService extends BluetoothService {
     private static int MESSAGE_RECONNECT = 3200;
 
     public static ServerService service;
 
-    @Override
-    public void onCreate() {
-        service = this;
-        super.onCreate();
+    public ServerService(RouterService routerService) {
+        super(routerService);
     }
 
     @Override
     protected BluetoothConnection createNewBTConnection() {
-        return new ServerBluetoothConnection(UUID.fromString(getString(R.string.bluetooth_uuid)), this, true);
+        return new ServerBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_server_uuid)), this, true);
     }
 
     @Override
     public void onConnectionLost(Queue<PendingData> left) {
         super.onConnectionLost(left);
-        startConnection();
+
+        if (isEnabled()) {
+            startConnection();
+        }
     }
 
     @Override
@@ -46,7 +47,7 @@ public class ServerService extends BluetoothService{
         super.onConnectionFailed(left);
 
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
-        if ( defaultAdapter != null && defaultAdapter.isEnabled() ) {
+        if (defaultAdapter != null && defaultAdapter.isEnabled() && isEnabled()) {
             mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 10000);
         }
     }
@@ -54,26 +55,11 @@ public class ServerService extends BluetoothService{
     @Override
     public void onCommandReceived(ConnectionCommand command) {
         super.onCommandReceived(command);
-        if ( command.type == BLUETOOTH_COMMAND_PASS_INTENT) {
-            broadcast(command.option);
-        }
-    }
-
-    private void broadcast(byte[] option) {
-        try {
-            String uri = new String(option);
-            Log.d(getTag(), "Broadcasting string: " + uri);
-            Intent intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME);
-            Log.d(getTag(), "Broadcasting Intent: " + intent);
-            sendBroadcast(intent);
-        } catch (URISyntaxException e) {
-            Log.e(getTag(), "Invalid URI", e );
-        }
     }
 
     @Override
     public boolean handleMessage(Message msg) {
-        if ( msg.what == MESSAGE_RECONNECT ) {
+        if (msg.what == MESSAGE_RECONNECT) {
             startConnection();
             return true;
         }
@@ -88,7 +74,7 @@ public class ServerService extends BluetoothService{
 
     public static String getServiceStatus() {
         ServerService ss = ServerService.service;
-        if ( ss != null ) {
+        if (ss != null) {
             return ss.getStatus();
         }
         return "Never Started";

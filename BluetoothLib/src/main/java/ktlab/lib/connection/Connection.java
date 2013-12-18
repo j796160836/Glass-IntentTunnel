@@ -182,11 +182,11 @@ public abstract class Connection extends Handler {
 
     private Queue<PendingData> getPendingDatas(Message msg) {
         Queue<PendingData> left = new LinkedList<PendingData>();
-        if( msg != null ) {
+        if( msg != null && msg.obj != null ) {
             left.add(new PendingData(msg.arg1, (ConnectionCommand)msg.obj));
         }
         for ( PendingData data : mQueue ) {
-            if ( data.id != PING_ID ) {
+            if ( data.id != PING_ID && data.getCommand() != null ) {
                 left.add(data);
             }
         }
@@ -249,7 +249,7 @@ public abstract class Connection extends Handler {
 
         // if sending data, queueing...
         if (isSending || !hasOpenConnection) {
-            if (canQueueing && ( !hasOpenConnection && type != PING)) {
+            if (canQueueing || ( !hasOpenConnection && type != PING)) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type, data));
                     mQueue.offer(p);
@@ -257,10 +257,12 @@ public abstract class Connection extends Handler {
                 Log.i(TAG, "sendData(), pending...");
                 return true;
             } else {
+                Log.i(TAG, "sendData(), not queuing...");
                 return false;
             }
         }
 
+        Log.v(TAG, "sendData(" + id +")");
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
         msg.obj = new ConnectionCommand(type, data);
@@ -281,7 +283,7 @@ public abstract class Connection extends Handler {
 
         // if sending data, queueing...
         if (isSending || !hasOpenConnection) {
-            if (canQueueing && ( !hasOpenConnection && type != PING)) {
+            if (canQueueing || ( !hasOpenConnection && type != PING)) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type));
                     mQueue.offer(p);
@@ -289,15 +291,15 @@ public abstract class Connection extends Handler {
                 Log.i(TAG, "sendData(), pending...");
                 return true;
             } else {
+                Log.i(TAG, "sendData(), not queuing...");
                 return false;
             }
         }
 
+        Log.v(TAG, "sendData(" + id +")");
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
         msg.obj = new ConnectionCommand(type);
-
-        Log.v(TAG, "sendData(" + id +")");
         mSendThread = new CommandSendThread(mOutput, msg, mOrder);
         mSendThread.start();
 

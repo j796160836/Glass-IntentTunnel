@@ -12,7 +12,6 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.net.BindException;
@@ -50,7 +49,7 @@ public class MusicActivity extends Activity {
 
         try {
             Intent in = new Intent();
-            in.setClassName("com.masterbaron.intenttunnel", "com.masterbaron.intenttunnel.service.RouterService");
+            in.setClassName("com.masterbaron.intenttunnel", "com.masterbaron.intenttunnel.router.RouterService");
             if ( !bindService(in, mConnection, Context.BIND_AUTO_CREATE) ) {
                 throw new BindException("failed to bind");
             }

@@ -1,4 +1,4 @@
-package com.masterbaron.intenttunnel.service;
+package com.masterbaron.intenttunnel.router;
 
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;

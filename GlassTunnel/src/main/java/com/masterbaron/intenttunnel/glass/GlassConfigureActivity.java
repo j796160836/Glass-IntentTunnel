@@ -2,23 +2,16 @@ package com.masterbaron.intenttunnel.glass;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.TextView;
 
 import com.masterbaron.intenttunnel.R;
-import com.masterbaron.intenttunnel.service.BluetoothService;
-import com.masterbaron.intenttunnel.service.ClientService;
-import com.masterbaron.intenttunnel.service.ServerService;
-
-import java.util.Set;
+import com.masterbaron.intenttunnel.router.RouterService;
 
 /**
  * Created by Van Etten on 12/2/13.
@@ -61,7 +54,7 @@ public class GlassConfigureActivity extends Activity {
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
-        boolean running = BluetoothService.areServicesRunning();
+        boolean running = RouterService.isServicesRunning();
 
         menu.findItem(R.id.start).setVisible(!running);
         menu.findItem(R.id.stop).setVisible(running);
@@ -80,7 +73,7 @@ public class GlassConfigureActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.start:
-                BluetoothService.startServices(this);
+                startService(new Intent(this, RouterService.class));
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
                     @Override
@@ -90,7 +83,7 @@ public class GlassConfigureActivity extends Activity {
                 }, 1000);
                 return true;
             case R.id.stop:
-                BluetoothService.stopServices(this);
+                stopService(new Intent(this, RouterService.class));
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
                     @Override
@@ -105,12 +98,12 @@ public class GlassConfigureActivity extends Activity {
     }
 
     public void showServerState() {
-        boolean running = BluetoothService.areServicesRunning();
+        boolean running = RouterService.isServicesRunning();
 
         if (running) {
             String text = "Running:";
-            text += "\nClient Service: " + ClientService.getServiceStatus();
-            text += "\nServer Service: " + ServerService.getServiceStatus();
+            text += "\nClient Service: " + RouterService.getClientStatus();
+            text += "\nServer Service: " + RouterService.getServerStatus();
             textView.setText(text);
         } else {
             textView.setText("Not Started");

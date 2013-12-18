@@ -13,11 +13,9 @@
         android:protectionLevel="dangerous" />
     -->
     <application>
-        <service android:name=".service.RouterService"
+        <service android:name=".router.RouterService"
             android:exported="true"/> <!-- android:permission="com.masterbaron.intenttunnel.SEND" -->
-        <service android:name=".service.ClientService"/>
-        <service android:name=".service.ServerService"/>
-        <receiver android:name=".service.ServiceReceiver" >
+        <receiver android:name=".router.ServiceReceiver" >
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.bluetooth.adapter.action.STATE_CHANGSENDED" />

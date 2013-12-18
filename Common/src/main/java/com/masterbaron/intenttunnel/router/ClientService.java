@@ -1,4 +1,4 @@
-package com.masterbaron.intenttunnel.service;
+package com.masterbaron.intenttunnel.router;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -29,27 +29,12 @@ public class ClientService extends BluetoothService {
 
     private BluetoothDevice mDevice;
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        // keep myself alive until I finish my work.
-        Intent in = new Intent();
-        in.setClass(this, ClientService.class);
-        startService(in);
-    }
-
-    @Override
-    public void onDestroy() {
-        mBTConnection = null;
-        super.onDestroy();
+    public ClientService(RouterService routerService) {
+        super(routerService);
     }
 
     @Override
     public void onConnectionFailed(Queue<PendingData> left) {
-        // we are going to need a new ClientService
-        tellRouterToRestartClient();
-
         // Have we failed enough?
         if (failedRetries > 5) {
             Log.d(getTag(), "Too many failed tries.  Clearing messages.");
@@ -57,29 +42,11 @@ public class ClientService extends BluetoothService {
             left.clear();
         }
         super.onConnectionFailed(left);
-        mBTConnection = null;
-        stopSelf();
     }
 
     @Override
     public void onConnectionLost(Queue<PendingData> left) {
-        tellRouterToRestartClient();
         super.onConnectionLost(left);
-        mBTConnection = null;
-        stopSelf();
-    }
-
-    private void tellRouterToRestartClient() {
-        try {
-            Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_CLIENT_FAILED);
-            mRouterService.send(msg);
-        } catch (RemoteException e) {
-            Log.d(getTag(), "tellRouterToRestartClient", e);
-        }
-    }
-
-    protected void startConnection() {
-        super.startConnection();
     }
 
     @Override
@@ -94,7 +61,7 @@ public class ClientService extends BluetoothService {
         // only return a connection if we found a device
         if (mDevice != null) {
             Log.d(getTag(), "Binding to: " + mDevice.getName());
-            return new ClientBluetoothConnection(UUID.fromString(getString(R.string.bluetooth_uuid)), this, true, mDevice);
+            return new ClientBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_client_uuid)), this, true, mDevice);
         }
         return null;
     }
@@ -113,10 +80,8 @@ public class ClientService extends BluetoothService {
             if (isConnected()) {
                 if (!mBTConnection.isSending() && !mBTConnection.hasPending()) {
                     if (getLastActivity() + CONNECTION_TIMEOUT < System.currentTimeMillis()) {
-                        if (!isBound()) {
-                            Log.d(getTag(), "MESSAGE_CHECK_TIMEOUT.  No binds: stopSelf()");
-                            stopSelf();
-                        }
+                        Log.d(getTag(), "MESSAGE_CHECK_TIMEOUT.  stopping connection");
+                        stopConnection();
                     }
                 }
 
@@ -125,14 +90,6 @@ public class ClientService extends BluetoothService {
             return true;
         }
         return super.handleMessage(msg);
-    }
-
-    public static String getServiceStatus() {
-        ClientService cs = ClientService.service;
-        if (cs != null) {
-            return cs.getStatus();
-        }
-        return "Never Started";
     }
 
     // Look for a connected device with glass in the name, or the one and only bound device
