@@ -8,8 +8,15 @@ import android.os.Message;
 import android.util.Base64;
 import android.util.Log;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
@@ -23,7 +30,9 @@ import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
  * Created by Van Etten on 12/6/13.
  */
 public abstract class BluetoothService implements ConnectionCallback, Handler.Callback {
-    private static final String ENCODER_KEY_PREFIX = "byte[IntentTunnel]";
+    private static final String ENCODER_KEY_PREFIX = "IntentTunnel[byte]";
+    private static final String ENCODER_KEY_LIST_STRING = "IntentTunnel.StringList";
+    private static final String ENCODER_KEY_LIST_INTEGER = "IntentTunnel.IntegerList";
 
     protected static byte BLUETOOTH_COMMAND_BROADCAST_INTENT = 100;
     protected static byte BLUETOOTH_COMMAND_STARTSERVICE_INTENT = 101;
@@ -302,6 +311,28 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 intent.putExtra(ENCODER_KEY_PREFIX + key, encoded);
                 intent.removeExtra(key);
             }
+            else if ( value instanceof List) {
+                boolean stringList = (extras.getStringArrayList(key) != null);
+                boolean intList = (extras.getIntegerArrayList(key) != null);
+                try {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ObjectOutputStream out = new ObjectOutputStream(baos);
+                    out.writeObject((List) value);
+                    out.close();
+                    baos.close();
+
+                    String encoded = Base64.encodeToString(baos.toByteArray(), 0);
+                    intent.removeExtra(key);
+
+                    if( stringList ) {
+                        intent.putExtra(ENCODER_KEY_LIST_STRING + key, encoded);
+                    } if( intList ) {
+                        intent.putExtra(ENCODER_KEY_LIST_INTEGER + key, encoded);
+                    }
+                } catch (IOException e) {
+                    Log.e(getTag(), "Invalid URI", e);
+                }
+            }
         }
 
         return intent.toUri(Intent.URI_INTENT_SCHEME);
@@ -316,6 +347,37 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             if ( key.startsWith(ENCODER_KEY_PREFIX)) {
                 String newKey = key.substring(ENCODER_KEY_PREFIX.length());
                 intent.putExtra(newKey, Base64.decode(extras.getString(key), 0));
+                intent.removeExtra(key);
+            }
+            else if ( key.startsWith(ENCODER_KEY_LIST_STRING) || key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                try {
+                    String newKey;
+                    if ( key.startsWith(ENCODER_KEY_LIST_STRING) ) {
+                        newKey = key.substring(ENCODER_KEY_LIST_STRING.length());
+                    } else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER) ) {
+                        newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
+                    } else {
+                        throw new IOException("Invalid URI");
+                    }
+
+                    ByteArrayInputStream bais = new ByteArrayInputStream( Base64.decode(extras.getString(key), 0));
+                    ObjectInputStream in = new ObjectInputStream(bais);
+                    ArrayList<?> list = (ArrayList<?>) in.readObject();
+                    intent.removeExtra(key);
+                    if ( key.startsWith(ENCODER_KEY_LIST_STRING) ) {
+                        intent.putExtra(newKey, (ArrayList<String>) list);
+                    } else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER) ) {
+                        intent.putExtra(newKey, (ArrayList<Integer>) list);
+                    }
+                } catch (IOException e) {
+                    Log.e(getTag(), "Invalid URI", e);
+                } catch (ClassNotFoundException e) {
+                    Log.e(getTag(), "Invalid URI", e);
+                }
+            }
+            else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                String newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
+                byte[] list = Base64.decode(extras.getString(key), 0);
                 intent.removeExtra(key);
             }
         }
