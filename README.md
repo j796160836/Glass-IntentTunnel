@@ -9,7 +9,7 @@ The idea is to have a service app on Glass and the Phone that would handle traff
 
 
 
-Install GlassTunnel to Glass.  Run the IntentTunnel app to start the tunnel services (It's in the voice menu)
+Install GlassTunnel to Glass.  Run the IntentTunnel app to start the tunnel services (Use Glass Launcher)
 
 Install AndroidTunnel to your phone.  Run the IntentTunnel app, press menu to start the tunnel services
 
