@@ -18,3 +18,14 @@ The MusicPusherSample sends "com.android.music.musicservicecommand" intents to t
 
 
 Thanks to https://github.com/KTlab/BluetoothCommunicationLibrary_Android for providing a solid bluetooth library to work off of.
+
+
+Features:
+* Stays disconnected until needed.
+* Stays connected for 15 seconds after last message is sent incase there is a flurry of traffic.
+* Remaining bound to the router server will keep the connection open until all binds to the service are disconnected.
+* Either side can initiate a message and start a bluetooth connection.
+* uses pings to ensure connection is actually working.
+
+* Intents are converted to strings using intent.toUri() 
+* Added support to also include byte[], string list, and integer list.
