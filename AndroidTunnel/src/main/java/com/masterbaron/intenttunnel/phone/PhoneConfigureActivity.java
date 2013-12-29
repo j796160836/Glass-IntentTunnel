@@ -1,26 +1,23 @@
 package com.masterbaron.intenttunnel.phone;
 
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 
 import com.masterbaron.intenttunnel.R;
 import com.masterbaron.intenttunnel.router.RouterService;
 
-import java.util.Set;
-
 public class PhoneConfigureActivity extends Activity {
     private static String TAG = PhoneConfigureActivity.class.getName();
 
     TextView textView;
+    View mProgress;
     private boolean mPaused = true;
 
     @Override
@@ -28,6 +25,8 @@ public class PhoneConfigureActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.device_config);
         textView = (TextView) findViewById(R.id.textView);
+        mProgress = findViewById(R.id.progressBar);
+        mProgress.setVisibility(View.INVISIBLE);
     }
 
     @Override
@@ -65,21 +64,25 @@ public class PhoneConfigureActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.start:
+                mProgress.setVisibility(View.VISIBLE);
                 startService(new Intent(this, RouterService.class));
                 ActivityCompat.invalidateOptionsMenu(this);
                 textView.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         ActivityCompat.invalidateOptionsMenu(PhoneConfigureActivity.this);
+                        mProgress.setVisibility(View.INVISIBLE);
                     }
                 }, 1000);
                 return true;
             case R.id.stop:
+                mProgress.setVisibility(View.VISIBLE);
                 stopService(new Intent(this, RouterService.class));
                 textView.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         ActivityCompat.invalidateOptionsMenu(PhoneConfigureActivity.this);
+                        mProgress.setVisibility(View.INVISIBLE);
                     }
                 }, 1000);
                 return true;
@@ -89,18 +92,18 @@ public class PhoneConfigureActivity extends Activity {
     }
 
     public void showServerState() {
-        boolean running = RouterService.isServicesRunning();
-
-        if (running) {
-            String text = "Running:";
-            text += "\nClient Service: " + RouterService.getClientStatus();
-            text += "\nServer Service: " + RouterService.getServerStatus();
-            textView.setText(text);
-        } else {
-            textView.setText("Not Started");
-        }
-
         if (!mPaused) {
+            boolean running = RouterService.isServicesRunning();
+
+            if (running) {
+                String text = "Statuses:";
+                text += "\nClient Service: " + RouterService.getClientStatus();
+                text += "\nServer Service: " + RouterService.getServerStatus();
+                textView.setText(text);
+            } else {
+                textView.setText("Not Started");
+            }
+
             textView.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -108,23 +111,5 @@ public class PhoneConfigureActivity extends Activity {
                 }
             }, 1000);
         }
-    }
-
-    public BluetoothDevice getClientDevice() {
-        BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (defaultAdapter != null && defaultAdapter.getBondedDevices().size() > 0) {
-            Set<BluetoothDevice> bondedDevices = defaultAdapter.getBondedDevices();
-            if (bondedDevices != null && bondedDevices.size() > 0) {
-                for (BluetoothDevice device : bondedDevices) {
-                    if (device.getBondState() == BluetoothDevice.BOND_BONDED) {
-                        if( device.getName().toLowerCase().contains("glass")) {
-                            Log.d(TAG, "BT Device: " + device.getName());
-                            return device;
-                        }
-                    }
-                }
-            }
-        }
-        return null;
     }
 }

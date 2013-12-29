@@ -34,6 +34,7 @@ public class CommandReceiveThread extends Thread {
                 length = mInput.read(rawHeader, receivedSize,
                         ConnectionCommand.HEADER_LENGTH - receivedSize);
             } catch (IOException e) {
+                Log.e("CommandReceiveThread", "error", e);
                 mMessage.what = Connection.EVENT_CONNECTION_FAIL;
                 mMessage.sendToTarget();
                 return;

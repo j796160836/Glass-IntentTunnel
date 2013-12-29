@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 
 import com.masterbaron.intenttunnel.R;
@@ -20,8 +21,10 @@ import com.masterbaron.intenttunnel.router.RouterService;
 public class GlassConfigureActivity extends Activity {
     private static String TAG = GlassConfigureActivity.class.getName();
 
-    TextView textView;
+    private TextView textView;
+    private View mProgress;
     private boolean mPaused = true;
+    private boolean waitForAction = false;
 
 
     @Override
@@ -29,6 +32,8 @@ public class GlassConfigureActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.glass_config);
         textView = (TextView) findViewById(R.id.textView);
+        mProgress = findViewById(R.id.progressBar);
+        mProgress.setVisibility(View.INVISIBLE);
     }
 
     @Override
@@ -63,9 +68,11 @@ public class GlassConfigureActivity extends Activity {
     }
 
     @Override
-    public void onContextMenuClosed(Menu menu) {
-        textView.setText("onContextMenuClosed()");
-        this.finish();
+    public void onOptionsMenuClosed(Menu menu) {
+        super.onOptionsMenuClosed(menu);
+        if (!waitForAction) {
+            this.finish();
+        }
     }
 
     @Override
@@ -73,22 +80,30 @@ public class GlassConfigureActivity extends Activity {
         // Handle item selection.
         switch (item.getItemId()) {
             case R.id.start:
+                waitForAction = true;
+                mProgress.setVisibility(View.VISIBLE);
                 startService(new Intent(this, RouterService.class));
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
                     @Override
                     public void run() {
+                        waitForAction = false;
                         openOptionsMenu();
+                        mProgress.setVisibility(View.INVISIBLE);
                     }
                 }, 1000);
                 return true;
             case R.id.stop:
+                waitForAction = true;
+                mProgress.setVisibility(View.VISIBLE);
                 stopService(new Intent(this, RouterService.class));
                 invalidateOptionsMenu();
                 textView.postDelayed(new Runnable() {
                     @Override
                     public void run() {
+                        waitForAction = false;
                         openOptionsMenu();
+                        mProgress.setVisibility(View.INVISIBLE);
                     }
                 }, 1000);
                 return true;
@@ -98,18 +113,18 @@ public class GlassConfigureActivity extends Activity {
     }
 
     public void showServerState() {
-        boolean running = RouterService.isServicesRunning();
-
-        if (running) {
-            String text = "Running:";
-            text += "\nClient Service: " + RouterService.getClientStatus();
-            text += "\nServer Service: " + RouterService.getServerStatus();
-            textView.setText(text);
-        } else {
-            textView.setText("Not Started");
-        }
-
         if (!mPaused) {
+            boolean running = RouterService.isServicesRunning();
+
+            if (running) {
+                String text = "Running:";
+                text += "\nClient Service: " + RouterService.getClientStatus();
+                text += "\nServer Service: " + RouterService.getServerStatus();
+                textView.setText(text);
+            } else {
+                textView.setText("Not Started");
+            }
+
             textView.postDelayed(new Runnable() {
                 @Override
                 public void run() {

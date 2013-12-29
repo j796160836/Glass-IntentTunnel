@@ -21,10 +21,11 @@ public abstract class Connection extends Handler {
     public static final int EVENT_DATA_SEND_COMPLETE = 3;
     public static final int EVENT_CONNECT_PING = 4;
     public static final int EVENT_CONNECTION_FAIL = 101;
+    public static final int EVENT_CONNECTION_SEND_FAIL = 102;
 
     private static final long PING_INTERVAL = 1000;
-    private static final long PING_LATE_TIME = 4000;
-    private static final long PING_WORRY_TIME = 3000;
+    private static final long PING_LATE_TIME = 15000;
+    private static final long PING_WORRY_TIME = 10000;
 
     // Event
     private static byte PING = Byte.MAX_VALUE;
@@ -64,7 +65,7 @@ public abstract class Connection extends Handler {
 
         switch (msg.what) {
             case EVENT_CONNECT_COMPLETE:
-                Log.i(TAG, "connect complete");
+                Log.i(TAG, "pre-connect complete");
                 mInput = mConnectionThread.getInputStream();
                 mOutput = mConnectionThread.getOutputStream();
                 //mCallback.onConnectComplete();
@@ -153,25 +154,32 @@ public abstract class Connection extends Handler {
                     Queue<PendingData> left = getPendingDatas(null);
                     if ( !hasOpenConnection) {
                         Log.e(TAG, "connection failed", e);
+                        removeCallbacksAndMessages(null);
                         mCallback.onConnectionFailed(left);
                     } else {
                         Log.e(TAG, "connection lost", e);
+                        removeCallbacksAndMessages(null);
                         mCallback.onConnectionLost(left);
                     }
                 }
                 break;
 
             case EVENT_CONNECTION_FAIL:
-                mSendThread = null;
-                isSending = false;
-                Queue<PendingData> left = getPendingDatas(msg);
-                if ( !hasOpenConnection) {
-                    Log.e(TAG, "connection failed");
-                    mCallback.onConnectionFailed(left);
-                    break;
-                } else {
-                    Log.e(TAG, "connection lost");
-                    mCallback.onConnectionLost(left);
+            case EVENT_CONNECTION_SEND_FAIL:
+                if ( msg.what == EVENT_CONNECTION_SEND_FAIL || !isSending ) {
+                    mSendThread = null;
+                    isSending = false;
+                    Queue<PendingData> left = getPendingDatas(msg);
+                    if ( !hasOpenConnection) {
+                        Log.e(TAG, "connection failed");
+                        removeCallbacksAndMessages(null);
+                        mCallback.onConnectionFailed(left);
+                        break;
+                    } else {
+                        Log.e(TAG, "connection lost");
+                        removeCallbacksAndMessages(null);
+                        mCallback.onConnectionLost(left);
+                    }
                 }
                 break;
 
@@ -222,8 +230,11 @@ public abstract class Connection extends Handler {
         // stop receive thread
         if (mReceiveThread != null) {
             mReceiveThread.forceStop();
+            mReceiveThread.interrupt();
             mReceiveThread = null;
         }
+
+        removeCallbacksAndMessages(null);
 
         // stop send thread
         mSendThread = null;

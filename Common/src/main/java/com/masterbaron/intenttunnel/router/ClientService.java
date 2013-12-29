@@ -22,9 +22,7 @@ import ktlab.lib.connection.bluetooth.ClientBluetoothConnection;
  * Created by Van Etten on 12/2/13.
  */
 public class ClientService extends BluetoothService {
-    private static final int MESSAGE_CHECK_TIMEOUT = 2300;
 
-    private static long CONNECTION_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
     private static ClientService service;
 
     private BluetoothDevice mDevice;
@@ -69,26 +67,12 @@ public class ClientService extends BluetoothService {
     @Override
     public void onConnectComplete() {
         super.onConnectComplete();
+        failedRetries = 0;
 
-        // start the process of checking for inactivity
-        mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_TIMEOUT);
     }
 
     @Override
     public boolean handleMessage(Message msg) {
-        if (msg.what == MESSAGE_CHECK_TIMEOUT) { // inactivity checking
-            if (isConnected()) {
-                if (!mBTConnection.isSending() && !mBTConnection.hasPending()) {
-                    if (getLastActivity() + CONNECTION_TIMEOUT < System.currentTimeMillis()) {
-                        Log.d(getTag(), "MESSAGE_CHECK_TIMEOUT.  stopping connection");
-                        stopConnection();
-                    }
-                }
-
-                mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_TIMEOUT);
-            }
-            return true;
-        }
         return super.handleMessage(msg);
     }
 

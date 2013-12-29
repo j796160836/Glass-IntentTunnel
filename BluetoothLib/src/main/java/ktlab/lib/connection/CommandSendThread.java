@@ -27,7 +27,7 @@ public class CommandSendThread extends Thread {
             mOut.write(ConnectionCommand.toByteArray(mCommand, mOrder));
         } catch (Exception e) {
             Log.e("CommandSendThread", "error", e);
-            mMessage.what = Connection.EVENT_CONNECTION_FAIL;
+            mMessage.what = Connection.EVENT_CONNECTION_SEND_FAIL;
         }
 
         mMessage.sendToTarget();

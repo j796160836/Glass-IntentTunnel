@@ -38,7 +38,7 @@ public class ServerService extends BluetoothService {
         super.onConnectionLost(left);
 
         if (isEnabled()) {
-            startConnection();
+            mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 250);
         }
     }
 

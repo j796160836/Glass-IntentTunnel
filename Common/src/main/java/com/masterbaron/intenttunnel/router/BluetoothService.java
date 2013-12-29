@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import ktlab.lib.connection.ConnectionCallback;
 import ktlab.lib.connection.ConnectionCommand;
@@ -36,6 +37,11 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
 
     protected static byte BLUETOOTH_COMMAND_BROADCAST_INTENT = 100;
     protected static byte BLUETOOTH_COMMAND_STARTSERVICE_INTENT = 101;
+
+    private static final int MESSAGE_CHECK_TIMEOUT = 2300;
+    private static long CONNECTION_CHECK_INTERVAL = TimeUnit.SECONDS.toMillis(5);
+    private static long CONNECTION_TIMEOUT = TimeUnit.SECONDS.toMillis(25);
+    private static long CONNECTION_SERVER_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
 
     protected static int failedRetries = 0;
     protected Handler mHandler;
@@ -81,7 +87,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         Log.d(getTag(), "created()");
         this.mRouterService = routerService;
 
-        mStatus = "Starting";
+        mStatus = "Ready";
 
         // setup handler and messenger
         mHandler = new Handler(this);
@@ -102,6 +108,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         mStatus = "Stopping";
         isEnabled = false;
         stopConnection();
+
         mStatus = "Stopped";
     }
 
@@ -110,7 +117,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
      */
     private void backToRouter(Queue<PendingData> left) {
         Log.e(getTag(), "reroute: " + left);
-        if (left != null) {
+        if (left != null && left.size() > 0 ) {
             for (PendingData data : left) {
                 if (data.getCommand().type == BLUETOOTH_COMMAND_BROADCAST_INTENT) {
                     try {
@@ -134,6 +141,9 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                     }
                 }
             }
+        } else {
+            Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_EMPTY_REROUTE);
+            mRouterService.mHandler.sendMessage(msg);
         }
     }
 
@@ -143,6 +153,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             mBTConnection.stopConnection();
             mBTConnection = null;
         }
+        mHandler.removeCallbacksAndMessages(null);
         mMessageId = 0;
         isRunning = false;
         isConnected = false;
@@ -157,7 +168,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         }
         if (mBTConnection != null) {
             // if this is a server, then we will be waiting for a connection
-            if (mBTConnection instanceof ServerBluetoothConnection) {
+            if (isBTServer()) {
                 mStatus = "Waiting for connection";
             }
 
@@ -166,6 +177,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             return true;
         } else {
             mStatus = "BT device failure";
+            onConnectionFailed(null);
         }
         return false;
     }
@@ -179,6 +191,9 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         // once connected reset failure counter
         failedRetries = 0;
         trackBluetoothActivity();
+
+        // start the process of checking for inactivity
+        mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_CHECK_INTERVAL);
     }
 
     /**
@@ -221,7 +236,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     @Override
     public void onDataSendComplete(int id) {
         Log.d(getTag(), "onDataSendComplete(" + id + ")");
-        mStatus = "Sent Data";
+        mStatus = "Ready (Sent Data)";
         trackBluetoothActivity();
     }
 
@@ -235,8 +250,12 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             startService(command.option);
         }
 
-        mStatus = "Received Data";
+        mStatus = "Ready (Received Data)";
         trackBluetoothActivity();
+    }
+
+    private boolean isBTServer() {
+        return mBTConnection instanceof ServerBluetoothConnection;
     }
 
     /**
@@ -249,9 +268,6 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 mMessageId++;
                 Intent intent = (Intent) msg.obj;
                 String sendUri = encodeIntent(intent);
-                Log.e(getTag(), "sending intent: " + intent);
-                Log.e(getTag(), "       of size: " + sendUri.length());
-
                 mBTConnection.sendData(BLUETOOTH_COMMAND_BROADCAST_INTENT, sendUri.getBytes(), mMessageId);
             } catch (Exception e) {
                 Log.e(getTag(), "failed to process ROUTER_MESSAGE_FORWARD_INTENT", e);
@@ -267,7 +283,26 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 Log.e(getTag(), "failed to process ROUTER_MESSAGE_FORWARD_INTENT", e);
             }
             return true;
+        } else if (msg.what == MESSAGE_CHECK_TIMEOUT) { // inactivity checking
+            if (isConnected()) {
+                if (!mBTConnection.isSending() && !mBTConnection.hasPending()) {
+                    long timeout = CONNECTION_TIMEOUT;
+                    if (isBTServer()) {
+                        timeout = CONNECTION_SERVER_TIMEOUT;
+                    }
+
+                    if (getLastActivity() + timeout < System.currentTimeMillis()) {
+                        Log.d(getTag(), "MESSAGE_CHECK_TIMEOUT.  stopping connection");
+                        onConnectionLost(null);
+                    }
+                }
+                if ( isConnected() ) {
+                    mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_CHECK_INTERVAL);
+                }
+            }
+            return true;
         }
+
         return false;
     }
 
