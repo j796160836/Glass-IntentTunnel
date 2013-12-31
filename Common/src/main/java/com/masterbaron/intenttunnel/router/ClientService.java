@@ -84,8 +84,10 @@ public class ClientService extends BluetoothService {
             if (bondedDevices != null) {
                 if (bondedDevices.size() == 1) {
                     BluetoothDevice device = bondedDevices.iterator().next();
-                    Log.d(getTag(), "BT Device: " + device.getName());
-                    return device;
+                    if (device.getBondState() == BluetoothDevice.BOND_BONDED) {
+                        Log.d(getTag(), "One BT Device: " + device.getName());
+                        return device;
+                    }
                 } else if (bondedDevices.size() > 0) {
                     for (BluetoothDevice device : bondedDevices) {
                         if (device.getBondState() == BluetoothDevice.BOND_BONDED) {

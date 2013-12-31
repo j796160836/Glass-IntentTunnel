@@ -164,6 +164,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         mStatus = "Connecting";
         mMessageId = 0;
         if (isBluetoothEnabled()) {
+            Log.d(getTag(), "createNewBTConnection");
             mBTConnection = createNewBTConnection();
         }
         if (mBTConnection != null) {
@@ -176,6 +177,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             mBTConnection.startConnection();
             return true;
         } else {
+            isRunning = false;
             mStatus = "BT device failure";
             onConnectionFailed(null);
         }

@@ -143,15 +143,20 @@ public class RouterService extends Service implements Handler.Callback {
             } else {
                 boolean queueMessage = false;
                 if (!mClientService.isRunning()) {
+                    Log.d(TAG, "sentToService: clientService not running");
                     if (System.currentTimeMillis() - mClientService.getLastFailTime() > 5000) {
+                        Log.d(TAG, "sentToService: connect bluetooth");
                         mClientService.startConnection();
                     } else {
+                        Log.d(TAG, "sentToService: queue messages");
                         queueMessage = true;
                     }
                 }
                 if (queueMessage) {
+                    Log.d(TAG, "sentToService: delay message for a second");
                     mHandler.sendMessageDelayed(routeMessage, 1000);
                 } else {
+                    Log.d(TAG, "sentToService: sending to clientService");
                     mClientService.send(routeMessage);
                 }
             }
