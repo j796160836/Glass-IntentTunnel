@@ -23,9 +23,8 @@ Thanks to https://github.com/KTlab/BluetoothCommunicationLibrary_Android for pro
 Features:
 * Stays disconnected until needed.
 * Stays connected for 15 seconds after last message is sent incase there is a flurry of traffic.
-* Remaining bound to the router server will keep the connection open until all binds to the service are disconnected.
+* Remaining bound to the router servvice will keep the connection open until all binds to the service are disconnected.  Use this if the 15 seconds is too low of a timeout.
 * Either side can initiate a message and start a bluetooth connection.
 * uses pings to ensure connection is actually working.
-
 * Intents are converted to strings using intent.toUri() 
 * Added support to also include byte[], string list, and integer list.
