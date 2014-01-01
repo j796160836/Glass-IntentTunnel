@@ -2,9 +2,7 @@ package com.masterbaron.intenttunnel.router;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.content.Intent;
 import android.os.Message;
-import android.os.RemoteException;
 import android.util.Log;
 
 import com.masterbaron.intenttunnel.R;
@@ -12,9 +10,7 @@ import com.masterbaron.intenttunnel.R;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
-import ktlab.lib.connection.PendingData;
 import ktlab.lib.connection.bluetooth.BluetoothConnection;
 import ktlab.lib.connection.bluetooth.ClientBluetoothConnection;
 
@@ -32,27 +28,6 @@ public class ClientService extends BluetoothService {
     }
 
     @Override
-    public void onConnectionFailed(Queue<PendingData> left) {
-        // Have we failed enough?
-        if (failedRetries > 5) {
-            Log.d(getTag(), "Too many failed tries.  Clearing messages.");
-            failedRetries = 0;
-            left.clear();
-        }
-        super.onConnectionFailed(left);
-    }
-
-    @Override
-    public void onConnectionLost(Queue<PendingData> left) {
-        super.onConnectionLost(left);
-    }
-
-    @Override
-    public void onDataSendComplete(int id) {
-        super.onDataSendComplete(id);
-    }
-
-    @Override
     protected BluetoothConnection createNewBTConnection() {
         mDevice = getBTDevice();
 
@@ -62,18 +37,6 @@ public class ClientService extends BluetoothService {
             return new ClientBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_client_uuid)), this, true, mDevice);
         }
         return null;
-    }
-
-    @Override
-    public void onConnectComplete() {
-        super.onConnectComplete();
-        failedRetries = 0;
-
-    }
-
-    @Override
-    public boolean handleMessage(Message msg) {
-        return super.handleMessage(msg);
     }
 
     // Look for a connected device with glass in the name, or the one and only bound device

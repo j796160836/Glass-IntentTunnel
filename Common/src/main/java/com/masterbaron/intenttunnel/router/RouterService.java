@@ -9,8 +9,8 @@ import android.os.Message;
 import android.os.Messenger;
 import android.util.Log;
 
+import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Queue;
 
 /**
  * Created by Van Etten on 12/9/13.
@@ -20,16 +20,17 @@ public class RouterService extends Service implements Handler.Callback {
 
     protected static final int ROUTER_MESSAGE_BROADCAST_INTENT = 1000;
     protected static final int ROUTER_MESSAGE_STARTSERVICE_INTENT = 1001;
-    protected static final int ROUTER_MESSAGE_EMPTY_REROUTE = 1002;
+    protected static final int ROUTER_MESSAGE_SEND_QUEUED_MESSAGES = 1100;
 
     private static RouterService service;
 
     private final Messenger mMessenger = new Messenger(new IncomingHandler());
-    private final Queue<Message> mPendingMessages = new LinkedList<Message>();
+    private final LinkedList<Packet> mPackets = new LinkedList<Packet>();
 
     protected Handler mHandler;
     private ClientService mClientService;
     private ServerService mServerService;
+    private long lastClientError;
 
     /**
      * Check if the service is still active
@@ -111,6 +112,7 @@ public class RouterService extends Service implements Handler.Callback {
                     mServerService.startConnection();
                 } else if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
                     mServerService.stopConnection();
+
                 }
             }
         }
@@ -132,36 +134,48 @@ public class RouterService extends Service implements Handler.Callback {
      * Route a message to a bluetooth service.
      * If the bluetooth server is connected, send to that service
      * otherwise, send to the client bluetooth to be sent
-     * @param msg
      */
-    protected void sentToService(Message msg) {
+    protected void sentToService() {
         try {
-            Message routeMessage = Message.obtain();
-            routeMessage.copyFrom(msg);
-            if (mServerService.isConnected()) {
-                mServerService.send(routeMessage);
-            } else {
-                boolean queueMessage = false;
-                if (!mClientService.isRunning()) {
-                    Log.d(TAG, "sentToService: clientService not running");
-                    if (System.currentTimeMillis() - mClientService.getLastFailTime() > 5000) {
-                        Log.d(TAG, "sentToService: connect bluetooth");
-                        mClientService.startConnection();
-                    } else {
-                        Log.d(TAG, "sentToService: queue messages");
-                        queueMessage = true;
+            expirePackets();
+            if ( mPackets.size() > 0 && isBluetoothEnabled() ) {
+                if (mServerService.isConnected()) {
+                    if ( !mServerService.isSending() ) {
+                        Log.d(TAG, "sentToService: serviceService running");
+                        mServerService.sendIntent(mPackets.poll());
                     }
-                }
-                if (queueMessage) {
-                    Log.d(TAG, "sentToService: delay message for a second");
-                    mHandler.sendMessageDelayed(routeMessage, 1000);
                 } else {
-                    Log.d(TAG, "sentToService: sending to clientService");
-                    mClientService.send(routeMessage);
+                    if (!mClientService.isRunning()) {
+                        if ( lastClientError + 5000 < System.currentTimeMillis() ) {
+                            Log.d(TAG, "sentToService: clientService not running");
+                            mClientService.startConnection();
+                        } else {
+                            Log.d(TAG, "sentToService: clientService error delay");
+                            mHandler.sendEmptyMessageDelayed(ROUTER_MESSAGE_SEND_QUEUED_MESSAGES, 1000);
+                        }
+                    } else if ( !mServerService.isSending() ) {
+                        Log.d(TAG, "sentToService: sending to clientService");
+                        mClientService.sendIntent(mPackets.poll());
+                    }
                 }
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to route message", e);
+        }
+    }
+
+    private void expirePackets() {
+        // now expire old ones
+        Iterator<Packet> iterator = mPackets.iterator();
+        while ( iterator.hasNext() ) {
+            if ( iterator.next().isExpired() ) {
+                iterator.remove();
+            }
+        }
+
+        // cap size of queue
+        while ( mPackets.size() > 100 ) {
+            mPackets.removeFirst();
         }
     }
 
@@ -172,20 +186,33 @@ public class RouterService extends Service implements Handler.Callback {
      */
     @Override
     public boolean handleMessage(Message msg) {
-        if (msg.what == ROUTER_MESSAGE_EMPTY_REROUTE) {
-            if (!mServerService.isConnected()) {
-                //Log.e(TAG, "handleMessage: restart server");
-                //mServerService.stopConnection();
-                //mServerService = new ServerService(this);
-                //mServerService.startConnection();
-            }
-        } else if (msg.what == ROUTER_MESSAGE_BROADCAST_INTENT || msg.what == ROUTER_MESSAGE_STARTSERVICE_INTENT) {
-            // ready to send the message to the ClientService
-            Log.e(TAG, "send message: " + msg.what);
-            sentToService(msg);
+        if (msg.what == ROUTER_MESSAGE_SEND_QUEUED_MESSAGES) {
+            sentToService();
             return true;
         }
         return false;
+    }
+
+    private void processQueue() {
+        mHandler.sendEmptyMessage(ROUTER_MESSAGE_SEND_QUEUED_MESSAGES);
+    }
+
+    protected void onIntentSendComplete(BluetoothService bluetoothService, Packet packet) {
+        processQueue();
+    }
+
+    protected void onIntentSendFail(BluetoothService bluetoothService, Packet packet) {
+        if ( !bluetoothService.isBTServer() ) {
+            lastClientError = System.currentTimeMillis();
+        }
+        if( packet != null ) {
+            mPackets.addFirst(packet);
+        }
+        processQueue();
+    }
+
+    protected void onConnectComplete(BluetoothService bluetoothService) {
+        processQueue();
     }
 
     /**
@@ -195,7 +222,26 @@ public class RouterService extends Service implements Handler.Callback {
         @Override
         public void handleMessage(Message msg) {
             Log.e(TAG, "send to service message: " + msg.what);
-            RouterService.this.handleMessage(msg);
+            if (msg.what == ROUTER_MESSAGE_BROADCAST_INTENT || msg.what == ROUTER_MESSAGE_STARTSERVICE_INTENT) {
+                if ( msg.obj instanceof  Intent ) {
+                    expirePackets();
+
+                    Intent intent = (Intent) msg.obj;
+                    Log.e(TAG, "send message: " + intent.toUri(0));
+                    mPackets.add( new Packet(msg.what, intent) );
+                    processQueue();
+                }
+            }
         }
+    }
+
+    public boolean isBluetoothEnabled() {
+        // if no bluetooth or off, then just stop since we cant do anything
+        BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (defaultAdapter == null || !defaultAdapter.isEnabled()) {
+            Log.d(TAG, "bluetooth adapter disabled");
+            return false;
+        }
+        return true;
     }
 }

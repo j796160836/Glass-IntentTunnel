@@ -23,6 +23,7 @@ public class CommandSendThread extends Thread {
 
     @Override
     public void run() {
+        Log.v("CommandSendThread", "write: " + mMessage.arg1);
         try {
             mOut.write(ConnectionCommand.toByteArray(mCommand, mOrder));
         } catch (Exception e) {
