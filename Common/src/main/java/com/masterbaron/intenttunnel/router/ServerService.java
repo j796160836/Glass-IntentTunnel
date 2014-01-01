@@ -1,18 +1,14 @@
 package com.masterbaron.intenttunnel.router;
 
 import android.bluetooth.BluetoothAdapter;
-import android.content.Intent;
 import android.os.Message;
-import android.util.Log;
 
 import com.masterbaron.intenttunnel.R;
 
-import java.net.URISyntaxException;
 import java.util.Queue;
 import java.util.UUID;
 
 import ktlab.lib.connection.ConnectionCommand;
-import ktlab.lib.connection.PendingData;
 import ktlab.lib.connection.bluetooth.BluetoothConnection;
 import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
 
@@ -30,12 +26,12 @@ public class ServerService extends BluetoothService {
 
     @Override
     protected BluetoothConnection createNewBTConnection() {
-        return new ServerBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_server_uuid)), this, true);
+        return new ServerBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_server_uuid)), this, false);
     }
 
     @Override
-    public void onConnectionLost(Queue<PendingData> left) {
-        super.onConnectionLost(left);
+    public void onConnectionLost() {
+        super.onConnectionLost();
 
         if (isEnabled()) {
             mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 250);
@@ -43,18 +39,13 @@ public class ServerService extends BluetoothService {
     }
 
     @Override
-    public void onConnectionFailed(Queue<PendingData> left) {
-        super.onConnectionFailed(left);
+    public void onConnectionFailed() {
+        super.onConnectionFailed();
 
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
         if (defaultAdapter != null && defaultAdapter.isEnabled() && isEnabled()) {
             mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 10000);
         }
-    }
-
-    @Override
-    public void onCommandReceived(ConnectionCommand command) {
-        super.onCommandReceived(command);
     }
 
     @Override

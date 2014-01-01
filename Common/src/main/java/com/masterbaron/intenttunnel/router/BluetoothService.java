@@ -15,7 +15,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
@@ -23,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 
 import ktlab.lib.connection.ConnectionCallback;
 import ktlab.lib.connection.ConnectionCommand;
-import ktlab.lib.connection.PendingData;
 import ktlab.lib.connection.bluetooth.BluetoothConnection;
 import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
 
@@ -39,11 +37,11 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     protected static byte BLUETOOTH_COMMAND_STARTSERVICE_INTENT = 101;
 
     private static final int MESSAGE_CHECK_TIMEOUT = 2300;
+    private static final int MESSAGE_BT_FAIL = 2301;
     private static long CONNECTION_CHECK_INTERVAL = TimeUnit.SECONDS.toMillis(5);
     private static long CONNECTION_TIMEOUT = TimeUnit.SECONDS.toMillis(25);
     private static long CONNECTION_SERVER_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
 
-    protected static int failedRetries = 0;
     protected Handler mHandler;
     protected BluetoothConnection mBTConnection;
     protected RouterService mRouterService;
@@ -53,8 +51,8 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     private boolean isRunning = false;
     private boolean isConnected = false;
     private long lastActivity = 0;
-    private long lastFailTime = 0;
     private int mMessageId = 0;
+    private Packet sendingPacket;
 
     abstract protected BluetoothConnection createNewBTConnection();
 
@@ -83,6 +81,10 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         return isEnabled;
     }
 
+    public boolean isSending() {
+        return sendingPacket != null;
+    }
+
     public BluetoothService(RouterService routerService) {
         Log.d(getTag(), "created()");
         this.mRouterService = routerService;
@@ -93,16 +95,6 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         mHandler = new Handler(this);
     }
 
-    public boolean isBluetoothEnabled() {
-        // if no bluetooth or off, then just stop since we cant do anything
-        BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (defaultAdapter == null || !defaultAdapter.isEnabled()) {
-            Log.d(getTag(), "bluetooth adapter disabled");
-            return false;
-        }
-        return true;
-    }
-
     public void stop() {
         Log.d(getTag(), "stopped()");
         mStatus = "Stopping";
@@ -110,41 +102,6 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         stopConnection();
 
         mStatus = "Stopped";
-    }
-
-    /**
-     * take and messages we haven't sent over bluetooth and send them back to the router.
-     */
-    private void backToRouter(Queue<PendingData> left) {
-        Log.e(getTag(), "reroute: " + left);
-        if (left != null && left.size() > 0 ) {
-            for (PendingData data : left) {
-                if (data.getCommand().type == BLUETOOTH_COMMAND_BROADCAST_INTENT) {
-                    try {
-                        byte[] bytes = data.getCommand().option;
-                        Intent intent = Intent.parseUri(new String(bytes), Intent.URI_INTENT_SCHEME);
-                        Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_BROADCAST_INTENT, intent);
-                        mRouterService.sentToService(msg);
-                        Log.e(getTag(), "rerouted " + msg);
-                    } catch (Exception e) {
-                        Log.e(getTag(), "failed to resend intent", e);
-                    }
-                } else if (data.getCommand().type == BLUETOOTH_COMMAND_STARTSERVICE_INTENT) {
-                    try {
-                        byte[] bytes = data.getCommand().option;
-                        Intent intent = Intent.parseUri(new String(bytes), Intent.URI_INTENT_SCHEME);
-                        Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_STARTSERVICE_INTENT, intent);
-                        mRouterService.sentToService(msg);
-                        Log.e(getTag(), "rerouted " + msg);
-                    } catch (Exception e) {
-                        Log.e(getTag(), "failed to resend intent", e);
-                    }
-                }
-            }
-        } else {
-            Message msg = Message.obtain(null, RouterService.ROUTER_MESSAGE_EMPTY_REROUTE);
-            mRouterService.mHandler.sendMessage(msg);
-        }
     }
 
     protected void stopConnection() {
@@ -163,7 +120,8 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     protected boolean startConnection() {
         mStatus = "Connecting";
         mMessageId = 0;
-        if (isBluetoothEnabled()) {
+        isRunning = true;
+        if (mRouterService.isBluetoothEnabled()) {
             Log.d(getTag(), "createNewBTConnection");
             mBTConnection = createNewBTConnection();
         }
@@ -173,15 +131,12 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 mStatus = "Waiting for connection";
             }
 
-            isRunning = true;
             mBTConnection.startConnection();
-            return true;
         } else {
-            isRunning = false;
             mStatus = "BT device failure";
-            onConnectionFailed(null);
+            mHandler.sendEmptyMessage(MESSAGE_BT_FAIL);
         }
-        return false;
+        return true;
     }
 
     @Override
@@ -191,8 +146,9 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         isConnected = true;
 
         // once connected reset failure counter
-        failedRetries = 0;
         trackBluetoothActivity();
+
+        mRouterService.onConnectComplete(this);
 
         // start the process of checking for inactivity
         mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_CHECK_INTERVAL);
@@ -207,32 +163,27 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     }
 
     @Override
-    public void onConnectionFailed(Queue<PendingData> left) {
+    public void onConnectionFailed() {
         Log.d(getTag(), "onConnectionFailed()");
         mStatus = "Connection Failed";
-        lastFailTime = System.currentTimeMillis();
-
-        // count failures so we can give up at some point
-        failedRetries++;
 
         stopConnection();
 
-        // when there is a failure, we need to send all of the pending messages back to the router.
-        backToRouter(left);
+        // when there is a failure, we need to tell the router it failed
+        mRouterService.onIntentSendFail(this, sendingPacket);
+        sendingPacket = null;
     }
 
     @Override
-    public void onConnectionLost(Queue<PendingData> left) {
+    public void onConnectionLost() {
         Log.d(getTag(), "onConnectionLost()");
         mStatus = "Connection Lost";
 
-        // count failures so we can give up at some point
-        failedRetries++;
-
         stopConnection();
 
-        // when there is a failure, we need to send all of the pending messages back to the router.
-        backToRouter(left);
+        // when there is a failure, we need to tell the router it failed
+        mRouterService.onIntentSendFail(this, sendingPacket);
+        sendingPacket = null;
     }
 
     @Override
@@ -240,6 +191,9 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         Log.d(getTag(), "onDataSendComplete(" + id + ")");
         mStatus = "Ready (Sent Data)";
         trackBluetoothActivity();
+
+        mRouterService.onIntentSendComplete(this, sendingPacket);
+        sendingPacket = null;
     }
 
     @Override
@@ -256,7 +210,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         trackBluetoothActivity();
     }
 
-    private boolean isBTServer() {
+    protected boolean isBTServer() {
         return mBTConnection instanceof ServerBluetoothConnection;
     }
 
@@ -295,25 +249,24 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
 
                     if (getLastActivity() + timeout < System.currentTimeMillis()) {
                         Log.d(getTag(), "MESSAGE_CHECK_TIMEOUT.  stopping connection");
-                        onConnectionLost(null);
+                        onConnectionLost();
                     }
                 }
-                if ( isConnected() ) {
+                if (isConnected()) {
                     mHandler.sendEmptyMessageDelayed(MESSAGE_CHECK_TIMEOUT, CONNECTION_CHECK_INTERVAL);
                 }
             }
             return true;
+        } else if (msg.what == MESSAGE_BT_FAIL) { // inactivity checking
+            onConnectionFailed();
         }
 
         return false;
     }
 
-    public void send(Message msg) {
-        mHandler.sendMessage(msg);
-    }
-
-    public long getLastFailTime() {
-        return lastFailTime;
+    public void sendIntent(Packet msg) {
+        sendingPacket = msg;
+        mHandler.obtainMessage(msg.getType(), msg.getIntent()).sendToTarget();
     }
 
     protected void broadcast(byte[] option) {
@@ -338,17 +291,16 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         }
     }
 
-    protected String encodeIntent( Intent intent ) {
+    protected String encodeIntent(Intent intent) {
         Bundle extras = intent.getExtras();
         Set<String> keys = extras.keySet();
-        for ( String key : keys ) {
+        for (String key : keys) {
             Object value = extras.get(key);
-            if ( value instanceof byte[] ) {
+            if (value instanceof byte[]) {
                 String encoded = Base64.encodeToString((byte[]) value, 0);
                 intent.putExtra(ENCODER_KEY_PREFIX + key, encoded);
                 intent.removeExtra(key);
-            }
-            else if ( value instanceof List) {
+            } else if (value instanceof List) {
                 boolean stringList = (extras.getStringArrayList(key) != null);
                 boolean intList = (extras.getIntegerArrayList(key) != null);
                 try {
@@ -361,9 +313,10 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                     String encoded = Base64.encodeToString(baos.toByteArray(), 0);
                     intent.removeExtra(key);
 
-                    if( stringList ) {
+                    if (stringList) {
                         intent.putExtra(ENCODER_KEY_LIST_STRING + key, encoded);
-                    } if( intList ) {
+                    }
+                    if (intList) {
                         intent.putExtra(ENCODER_KEY_LIST_INTEGER + key, encoded);
                     }
                 } catch (IOException e) {
@@ -380,30 +333,29 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
 
         Bundle extras = intent.getExtras();
         Set<String> keys = extras.keySet();
-        for ( String key : keys ) {
-            if ( key.startsWith(ENCODER_KEY_PREFIX)) {
+        for (String key : keys) {
+            if (key.startsWith(ENCODER_KEY_PREFIX)) {
                 String newKey = key.substring(ENCODER_KEY_PREFIX.length());
                 intent.putExtra(newKey, Base64.decode(extras.getString(key), 0));
                 intent.removeExtra(key);
-            }
-            else if ( key.startsWith(ENCODER_KEY_LIST_STRING) || key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+            } else if (key.startsWith(ENCODER_KEY_LIST_STRING) || key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
                 try {
                     String newKey;
-                    if ( key.startsWith(ENCODER_KEY_LIST_STRING) ) {
+                    if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
                         newKey = key.substring(ENCODER_KEY_LIST_STRING.length());
-                    } else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER) ) {
+                    } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
                         newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
                     } else {
                         throw new IOException("Invalid URI");
                     }
 
-                    ByteArrayInputStream bais = new ByteArrayInputStream( Base64.decode(extras.getString(key), 0));
+                    ByteArrayInputStream bais = new ByteArrayInputStream(Base64.decode(extras.getString(key), 0));
                     ObjectInputStream in = new ObjectInputStream(bais);
                     ArrayList<?> list = (ArrayList<?>) in.readObject();
                     intent.removeExtra(key);
-                    if ( key.startsWith(ENCODER_KEY_LIST_STRING) ) {
+                    if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
                         intent.putExtra(newKey, (ArrayList<String>) list);
-                    } else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER) ) {
+                    } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
                         intent.putExtra(newKey, (ArrayList<Integer>) list);
                     }
                 } catch (IOException e) {
@@ -411,8 +363,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 } catch (ClassNotFoundException e) {
                     Log.e(getTag(), "Invalid URI", e);
                 }
-            }
-            else if ( key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+            } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
                 String newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
                 byte[] list = Base64.decode(extras.getString(key), 0);
                 intent.removeExtra(key);
