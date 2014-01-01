@@ -34,7 +34,7 @@ public class ClientService extends BluetoothService {
         // only return a connection if we found a device
         if (mDevice != null) {
             Log.d(getTag(), "Binding to: " + mDevice.getName());
-            return new ClientBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_client_uuid)), this, true, mDevice);
+            return new ClientBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_client_uuid)), this, false, mDevice);
         }
         return null;
     }
