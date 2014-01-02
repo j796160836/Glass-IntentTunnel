@@ -35,6 +35,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
 
     protected static byte BLUETOOTH_COMMAND_BROADCAST_INTENT = 100;
     protected static byte BLUETOOTH_COMMAND_STARTSERVICE_INTENT = 101;
+    protected static byte BLUETOOTH_COMMAND_STARTACTIVITY_INTENT = 102;
 
     private static final int MESSAGE_CHECK_TIMEOUT = 2300;
     private static final int MESSAGE_BT_FAIL = 2301;
@@ -204,6 +205,8 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             broadcast(command.option);
         } else if (command.type == BLUETOOTH_COMMAND_STARTSERVICE_INTENT) {
             startService(command.option);
+        } else if (command.type == BLUETOOTH_COMMAND_STARTACTIVITY_INTENT) {
+            startActivity(command.option);
         }
 
         mStatus = "Ready (Received Data)";
@@ -219,14 +222,14 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
      */
     public boolean handleMessage(Message msg) {
         Log.d(getTag(), "act on what=" + msg.what);
-        if (msg.what == RouterService.ROUTER_MESSAGE_BROADCAST_INTENT) {
+        if (msg.what == RouterService.ROUTER_MESSAGE_BROADCAST_INTENT ) {
             try {
                 mMessageId++;
                 Intent intent = (Intent) msg.obj;
                 String sendUri = encodeIntent(intent);
                 mBTConnection.sendData(BLUETOOTH_COMMAND_BROADCAST_INTENT, sendUri.getBytes(), mMessageId);
             } catch (Exception e) {
-                Log.e(getTag(), "failed to process ROUTER_MESSAGE_FORWARD_INTENT", e);
+                Log.e(getTag(), "failed to process BLUETOOTH_COMMAND_BROADCAST_INTENT", e);
             }
             return true;
         } else if (msg.what == RouterService.ROUTER_MESSAGE_STARTSERVICE_INTENT) {
@@ -236,7 +239,17 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
                 String sendUri = encodeIntent(intent);
                 mBTConnection.sendData(BLUETOOTH_COMMAND_STARTSERVICE_INTENT, sendUri.getBytes(), mMessageId);
             } catch (Exception e) {
-                Log.e(getTag(), "failed to process ROUTER_MESSAGE_FORWARD_INTENT", e);
+                Log.e(getTag(), "failed to process BLUETOOTH_COMMAND_STARTSERVICE_INTENT", e);
+            }
+            return true;
+        } else if (msg.what == RouterService.ROUTER_MESSAGE_STARTACTIVITY_INTENT) {
+            try {
+                mMessageId++;
+                Intent intent = (Intent) msg.obj;
+                String sendUri = encodeIntent(intent);
+                mBTConnection.sendData(BLUETOOTH_COMMAND_STARTACTIVITY_INTENT, sendUri.getBytes(), mMessageId);
+            } catch (Exception e) {
+                Log.e(getTag(), "failed to process BLUETOOTH_COMMAND_STARTACTIVITY_INTENT", e);
             }
             return true;
         } else if (msg.what == MESSAGE_CHECK_TIMEOUT) { // inactivity checking
@@ -291,36 +304,49 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         }
     }
 
+    protected void startActivity(byte[] option) {
+        try {
+            String uri = new String(option);
+            Intent intent = decodeIntent(uri);
+            Log.d(getTag(), "startService Intent: " + intent);
+            mRouterService.startActivity(intent);
+        } catch (URISyntaxException e) {
+            Log.e(getTag(), "Invalid URI", e);
+        }
+    }
+
     protected String encodeIntent(Intent intent) {
         Bundle extras = intent.getExtras();
-        Set<String> keys = extras.keySet();
-        for (String key : keys) {
-            Object value = extras.get(key);
-            if (value instanceof byte[]) {
-                String encoded = Base64.encodeToString((byte[]) value, 0);
-                intent.putExtra(ENCODER_KEY_PREFIX + key, encoded);
-                intent.removeExtra(key);
-            } else if (value instanceof List) {
-                boolean stringList = (extras.getStringArrayList(key) != null);
-                boolean intList = (extras.getIntegerArrayList(key) != null);
-                try {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ObjectOutputStream out = new ObjectOutputStream(baos);
-                    out.writeObject((List) value);
-                    out.close();
-                    baos.close();
-
-                    String encoded = Base64.encodeToString(baos.toByteArray(), 0);
+        if ( extras != null ) {
+            Set<String> keys = extras.keySet();
+            for (String key : keys) {
+                Object value = extras.get(key);
+                if (value instanceof byte[]) {
+                    String encoded = Base64.encodeToString((byte[]) value, 0);
+                    intent.putExtra(ENCODER_KEY_PREFIX + key, encoded);
                     intent.removeExtra(key);
+                } else if (value instanceof List) {
+                    boolean stringList = (extras.getStringArrayList(key) != null);
+                    boolean intList = (extras.getIntegerArrayList(key) != null);
+                    try {
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        ObjectOutputStream out = new ObjectOutputStream(baos);
+                        out.writeObject((List) value);
+                        out.close();
+                        baos.close();
 
-                    if (stringList) {
-                        intent.putExtra(ENCODER_KEY_LIST_STRING + key, encoded);
+                        String encoded = Base64.encodeToString(baos.toByteArray(), 0);
+                        intent.removeExtra(key);
+
+                        if (stringList) {
+                            intent.putExtra(ENCODER_KEY_LIST_STRING + key, encoded);
+                        }
+                        if (intList) {
+                            intent.putExtra(ENCODER_KEY_LIST_INTEGER + key, encoded);
+                        }
+                    } catch (IOException e) {
+                        Log.e(getTag(), "Invalid URI", e);
                     }
-                    if (intList) {
-                        intent.putExtra(ENCODER_KEY_LIST_INTEGER + key, encoded);
-                    }
-                } catch (IOException e) {
-                    Log.e(getTag(), "Invalid URI", e);
                 }
             }
         }
@@ -332,41 +358,43 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
         Intent intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME);
 
         Bundle extras = intent.getExtras();
-        Set<String> keys = extras.keySet();
-        for (String key : keys) {
-            if (key.startsWith(ENCODER_KEY_PREFIX)) {
-                String newKey = key.substring(ENCODER_KEY_PREFIX.length());
-                intent.putExtra(newKey, Base64.decode(extras.getString(key), 0));
-                intent.removeExtra(key);
-            } else if (key.startsWith(ENCODER_KEY_LIST_STRING) || key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
-                try {
-                    String newKey;
-                    if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
-                        newKey = key.substring(ENCODER_KEY_LIST_STRING.length());
-                    } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
-                        newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
-                    } else {
-                        throw new IOException("Invalid URI");
-                    }
-
-                    ByteArrayInputStream bais = new ByteArrayInputStream(Base64.decode(extras.getString(key), 0));
-                    ObjectInputStream in = new ObjectInputStream(bais);
-                    ArrayList<?> list = (ArrayList<?>) in.readObject();
+        if ( extras != null ) {
+            Set<String> keys = extras.keySet();
+            for (String key : keys) {
+                if (key.startsWith(ENCODER_KEY_PREFIX)) {
+                    String newKey = key.substring(ENCODER_KEY_PREFIX.length());
+                    intent.putExtra(newKey, Base64.decode(extras.getString(key), 0));
                     intent.removeExtra(key);
-                    if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
-                        intent.putExtra(newKey, (ArrayList<String>) list);
-                    } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
-                        intent.putExtra(newKey, (ArrayList<Integer>) list);
+                } else if (key.startsWith(ENCODER_KEY_LIST_STRING) || key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                    try {
+                        String newKey;
+                        if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
+                            newKey = key.substring(ENCODER_KEY_LIST_STRING.length());
+                        } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                            newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
+                        } else {
+                            throw new IOException("Invalid URI");
+                        }
+
+                        ByteArrayInputStream bais = new ByteArrayInputStream(Base64.decode(extras.getString(key), 0));
+                        ObjectInputStream in = new ObjectInputStream(bais);
+                        ArrayList<?> list = (ArrayList<?>) in.readObject();
+                        intent.removeExtra(key);
+                        if (key.startsWith(ENCODER_KEY_LIST_STRING)) {
+                            intent.putExtra(newKey, (ArrayList<String>) list);
+                        } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                            intent.putExtra(newKey, (ArrayList<Integer>) list);
+                        }
+                    } catch (IOException e) {
+                        Log.e(getTag(), "Invalid URI", e);
+                    } catch (ClassNotFoundException e) {
+                        Log.e(getTag(), "Invalid URI", e);
                     }
-                } catch (IOException e) {
-                    Log.e(getTag(), "Invalid URI", e);
-                } catch (ClassNotFoundException e) {
-                    Log.e(getTag(), "Invalid URI", e);
+                } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
+                    String newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
+                    byte[] list = Base64.decode(extras.getString(key), 0);
+                    intent.removeExtra(key);
                 }
-            } else if (key.startsWith(ENCODER_KEY_LIST_INTEGER)) {
-                String newKey = key.substring(ENCODER_KEY_LIST_INTEGER.length());
-                byte[] list = Base64.decode(extras.getString(key), 0);
-                intent.removeExtra(key);
             }
         }
         return intent;

@@ -20,6 +20,8 @@ public class RouterService extends Service implements Handler.Callback {
 
     protected static final int ROUTER_MESSAGE_BROADCAST_INTENT = 1000;
     protected static final int ROUTER_MESSAGE_STARTSERVICE_INTENT = 1001;
+    protected static final int ROUTER_MESSAGE_STARTACTIVITY_INTENT = 1002;
+
     protected static final int ROUTER_MESSAGE_SEND_QUEUED_MESSAGES = 1100;
 
     private static RouterService service;
@@ -222,7 +224,8 @@ public class RouterService extends Service implements Handler.Callback {
         @Override
         public void handleMessage(Message msg) {
             Log.e(TAG, "send to service message: " + msg.what);
-            if (msg.what == ROUTER_MESSAGE_BROADCAST_INTENT || msg.what == ROUTER_MESSAGE_STARTSERVICE_INTENT) {
+            if (msg.what == ROUTER_MESSAGE_BROADCAST_INTENT || msg.what == ROUTER_MESSAGE_STARTSERVICE_INTENT
+                    || msg.what == ROUTER_MESSAGE_STARTACTIVITY_INTENT) {
                 if ( msg.obj instanceof  Intent ) {
                     expirePackets();
 
