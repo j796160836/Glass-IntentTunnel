@@ -1,7 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">IntentTunnel</string>
-
-    <string name="bluetooth_server_uuid">00001104-0000-1000-8000-00123F9B34FB</string>
-    <string name="bluetooth_client_uuid">00001114-0000-1000-8000-00123F9B34FB</string>
 </resources>

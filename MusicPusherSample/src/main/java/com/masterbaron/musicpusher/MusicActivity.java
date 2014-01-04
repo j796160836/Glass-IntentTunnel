@@ -70,8 +70,6 @@ public class MusicActivity extends Activity {
 
     private void sendCommand(Intent action) throws RemoteException {
         Log.d("MusicPusher", action.toUri(Intent.URI_INTENT_SCHEME));
-        //Log.d("MusicPusher", "service=" + startService(push));
-
         mService.send(Message.obtain(null, 1000, action));
     }
 
@@ -105,6 +103,13 @@ public class MusicActivity extends Activity {
         try {
             Intent i = new Intent("com.android.music.musicservicecommand");
             if ("play".equals(command)) {
+                // start google music since play won't start unless it's been activated
+                Intent start = new Intent("android.intent.action.MAIN");
+                start.setPackage("com.google.android.music");
+                start.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mService.send(Message.obtain(null, 1002, start));
+                Thread.sleep(2000);
+
                 i.putExtra("command", "play");
                 sendCommand(i);
             } else if ("pause".equals(command)) {

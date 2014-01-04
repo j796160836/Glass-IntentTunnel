@@ -26,7 +26,12 @@ public class ServerService extends BluetoothService {
 
     @Override
     protected BluetoothConnection createNewBTConnection() {
-        return new ServerBluetoothConnection(UUID.fromString(mRouterService.getString(R.string.bluetooth_server_uuid)), this, false);
+        BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        if (defaultAdapter != null) {
+            return new ServerBluetoothConnection(getUUIDFromAddress(defaultAdapter.getAddress()), this, false);
+        }
+        return null;
     }
 
     @Override

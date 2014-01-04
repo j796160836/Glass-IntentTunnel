@@ -10,4 +10,8 @@
         android:title="Stop"
         android:orderInCategory="100"
         android:showAsAction="never" />
+    <item android:id="@+id/device"
+        android:title="Select BT Device"
+        android:orderInCategory="200"
+        android:showAsAction="never" />
 </menu>

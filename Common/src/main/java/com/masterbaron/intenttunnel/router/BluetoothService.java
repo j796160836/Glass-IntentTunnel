@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import ktlab.lib.connection.ConnectionCallback;
@@ -29,6 +30,8 @@ import ktlab.lib.connection.bluetooth.ServerBluetoothConnection;
  * Created by Van Etten on 12/6/13.
  */
 public abstract class BluetoothService implements ConnectionCallback, Handler.Callback {
+    private static final String UUID_BASE="-756C-11E3-981F-0800200C9A66";
+
     private static final String ENCODER_KEY_PREFIX = "IntentTunnel[byte]";
     private static final String ENCODER_KEY_LIST_STRING = "IntentTunnel.StringList";
     private static final String ENCODER_KEY_LIST_INTEGER = "IntentTunnel.IntegerList";
@@ -398,5 +401,11 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             }
         }
         return intent;
+    }
+
+    protected UUID getUUIDFromAddress(String address) {
+        long num = Math.abs(address.hashCode() % 99999999);
+        String prefix = String.format("%08d", num);
+        return UUID.fromString(prefix + UUID_BASE);
     }
 }

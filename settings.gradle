@@ -1,1 +1,1 @@
-include 'BluetoothLib', 'Common', 'AndroidTunnel', 'GlassTunnel', 'MusicPusherSample'
+include 'IntentTunnel', 'AndroidTunnel', 'GlassTunnel', 'Common', 'BluetoothLib', 'MusicPusherSample'

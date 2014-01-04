@@ -2,7 +2,9 @@ package com.masterbaron.intenttunnel.router;
 
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -24,6 +26,7 @@ public class RouterService extends Service implements Handler.Callback {
 
     protected static final int ROUTER_MESSAGE_SEND_QUEUED_MESSAGES = 1100;
 
+    private static Boolean isGlass = null;
     private static RouterService service;
 
     private final Messenger mMessenger = new Messenger(new IncomingHandler());
@@ -71,6 +74,9 @@ public class RouterService extends Service implements Handler.Callback {
         Log.d(TAG, "onCreate()");
         super.onCreate();
         service = this;
+
+        getPreferences(this).registerOnSharedPreferenceChangeListener(mPreferenceHandler);
+
         startService(new Intent(this, RouterService.class));
 
         // setup handler and messenger
@@ -89,6 +95,7 @@ public class RouterService extends Service implements Handler.Callback {
     public void onDestroy() {
         Log.d(TAG, "onDestroy()");
 
+        getPreferences(this).unregisterOnSharedPreferenceChangeListener(mPreferenceHandler);
         mClientService.stop();
         mServerService.stop();
         service = null;
@@ -244,10 +251,46 @@ public class RouterService extends Service implements Handler.Callback {
     public boolean isBluetoothEnabled() {
         // if no bluetooth or off, then just stop since we cant do anything
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
+
         if (defaultAdapter == null || !defaultAdapter.isEnabled()) {
             Log.d(TAG, "bluetooth adapter disabled");
             return false;
         }
         return true;
     }
+
+    public static boolean isGlass() {
+        if( isGlass == null ) {
+            try {
+                RouterService.class.getClassLoader().loadClass("com.google.android.glass.timeline.TimelineManager");
+                isGlass = true;
+            } catch (Exception e) {
+                isGlass = false;
+            }
+        }
+
+        return isGlass;
+    }
+
+    public static SharedPreferences getPreferences(Context context) {
+        return context.getSharedPreferences("Router", Context.MODE_PRIVATE);
+    }
+
+    public static void setDeviceAddress(Context context, String address) {
+        SharedPreferences.Editor edit = getPreferences(context).edit();
+        edit.putString("bt.device.address", address);
+        edit.commit();
+    }
+    public static String getDeviceAddress(Context context) {
+        return getPreferences(context).getString("bt.device.address", null);
+    }
+
+    private SharedPreferences.OnSharedPreferenceChangeListener mPreferenceHandler = new SharedPreferences.OnSharedPreferenceChangeListener() {
+        @Override
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            if( "bt.device.address".equals(key)) {
+                mClientService.onConnectionLost();
+            }
+        }
+    };
 }
