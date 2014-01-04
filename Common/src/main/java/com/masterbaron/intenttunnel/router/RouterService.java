@@ -206,6 +206,9 @@ public class RouterService extends Service implements Handler.Callback {
     protected void onIntentSendFail(BluetoothService bluetoothService, Packet packet) {
         if ( !bluetoothService.isBTServer() ) {
             lastClientError = System.currentTimeMillis();
+            if ( !mServerService.isConnected() ) {
+                mServerService.onConnectionLost();
+            }
         }
         if( packet != null ) {
             mPackets.addFirst(packet);

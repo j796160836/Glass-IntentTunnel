@@ -214,7 +214,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     }
 
     protected boolean isBTServer() {
-        return mBTConnection instanceof ServerBluetoothConnection;
+        return this instanceof ServerService;
     }
 
     /**

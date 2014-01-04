@@ -31,19 +31,20 @@ public class ServerService extends BluetoothService {
 
     @Override
     public void onConnectionLost() {
+        boolean enabled = isEnabled();
         super.onConnectionLost();
-
-        if (isEnabled()) {
-            mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 250);
+        if (enabled) {
+            mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 2000);
         }
     }
 
     @Override
     public void onConnectionFailed() {
+        boolean enabled = isEnabled();
         super.onConnectionFailed();
 
         BluetoothAdapter defaultAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (defaultAdapter != null && defaultAdapter.isEnabled() && isEnabled()) {
+        if (defaultAdapter != null && defaultAdapter.isEnabled() && enabled) {
             mHandler.sendEmptyMessageDelayed(MESSAGE_RECONNECT, 10000);
         }
     }
