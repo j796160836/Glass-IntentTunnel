@@ -23,65 +23,72 @@ public class CommandReceiveThread extends Thread {
     }
 
     public void run() {
-        byte[] rawHeader = new byte[ConnectionCommand.HEADER_LENGTH];
+        try {
 
-        int receivedSize = 0;
+            byte[] rawHeader = new byte[ConnectionCommand.HEADER_LENGTH];
 
-        // receive header
-        while (!forceStop && (receivedSize < ConnectionCommand.HEADER_LENGTH)) {
-            int length = 0;
-            try {
-                length = mInput.read(rawHeader, receivedSize,
-                        ConnectionCommand.HEADER_LENGTH - receivedSize);
-            } catch (IOException e) {
-                Log.e("CommandReceiveThread", "error", e);
-                mMessage.what = Connection.EVENT_CONNECTION_FAIL;
-                mMessage.sendToTarget();
-                return;
-            }
-            if (length != -1) {
-                receivedSize += length;
-            }
+            int receivedSize = 0;
 
-            if (length == 0) {
+            // receive header
+            while (!forceStop && (receivedSize < ConnectionCommand.HEADER_LENGTH)) {
+                int length = 0;
                 try {
-                    sleep(50);
-                } catch (InterruptedException e) {
-                    // DO NOTHING
+                    length = mInput.read(rawHeader, receivedSize,
+                            ConnectionCommand.HEADER_LENGTH - receivedSize);
+                } catch (IOException e) {
+                    Log.e("CommandReceiveThread", "error", e);
+                    mMessage.what = Connection.EVENT_CONNECTION_FAIL;
+                    mMessage.sendToTarget();
+                    return;
+                }
+                if (length != -1) {
+                    receivedSize += length;
+                }
+
+                if (length == 0) {
+                    try {
+                        sleep(50);
+                    } catch (InterruptedException e) {
+                        // DO NOTHING
+                    }
                 }
             }
-        }
 
-        int optionLen = ByteBuffer.wrap(rawHeader).order(mOrder).getInt(1);
+            int optionLen = ByteBuffer.wrap(rawHeader).order(mOrder).getInt(1);
+            byte[] rawOption = new byte[optionLen];
+            receivedSize = 0;
 
-        byte[] rawOption = new byte[optionLen];
-        receivedSize = 0;
+            // receive option
+            while (!forceStop && (receivedSize < optionLen)) {
 
-        // receive option
-        while (!forceStop && (receivedSize < optionLen)) {
-
-            int length = 0;
-            try {
-                length = mInput.read(rawOption, receivedSize, optionLen
-                        - receivedSize);
-            } catch (IOException e) {
-                mMessage.what = Connection.EVENT_CONNECTION_FAIL;
-                mMessage.sendToTarget();
-                return;
+                int length = 0;
+                try {
+                    length = mInput.read(rawOption, receivedSize, optionLen
+                            - receivedSize);
+                } catch (IOException e) {
+                    Log.e("CommandReceiveThread", "error", e);
+                    mMessage.what = Connection.EVENT_CONNECTION_FAIL;
+                    mMessage.sendToTarget();
+                    return;
+                }
+                if (length != -1) {
+                    receivedSize += length;
+                }
             }
-            if (length != -1) {
-                receivedSize += length;
-            }
+
+            byte[] orderedOption = new byte[rawOption.length];
+            ByteBuffer.wrap(rawOption).order(mOrder).get(orderedOption);
+
+            ConnectionCommand command = ConnectionCommand.fromHeaderAndOption(
+                    rawHeader, rawOption, mOrder);
+
+            Log.v("CommandReceiverThread", "CommandReceiveThread=" + mMessage.what);
+            mMessage.obj = command;
         }
-
-        byte[] orderedOption = new byte[rawOption.length];
-        ByteBuffer.wrap(rawOption).order(mOrder).get(orderedOption);
-
-        ConnectionCommand command = ConnectionCommand.fromHeaderAndOption(
-                rawHeader, rawOption, mOrder);
-
-        Log.v("CommandReceiverThread", "CommandReceiveThread=" + mMessage.what);
-        mMessage.obj = command;
+        catch ( Exception e ) {
+            Log.e("CommandReceiveThread", "error", e);
+            mMessage.what = Connection.EVENT_CONNECTION_FAIL;
+        }
         mMessage.sendToTarget();
     }
 
