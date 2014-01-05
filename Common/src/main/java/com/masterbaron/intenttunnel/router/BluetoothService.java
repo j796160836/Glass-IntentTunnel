@@ -256,7 +256,7 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
             }
             return true;
         } else if (msg.what == MESSAGE_CHECK_TIMEOUT) { // inactivity checking
-            if (isConnected()) {
+            if (mBTConnection != null && isConnected()) {
                 if (!mBTConnection.isSending() && !mBTConnection.hasPending()) {
                     long timeout = CONNECTION_TIMEOUT;
                     if (isBTServer()) {
@@ -286,35 +286,35 @@ public abstract class BluetoothService implements ConnectionCallback, Handler.Ca
     }
 
     protected void broadcast(byte[] option) {
+        String uri = new String(option);
         try {
-            String uri = new String(option);
             Intent intent = decodeIntent(uri);
             Log.d(getTag(), "Broadcasting Intent: " + intent);
             mRouterService.sendBroadcast(intent);
-        } catch (URISyntaxException e) {
-            Log.e(getTag(), "Invalid URI", e);
+        } catch (Exception e) {
+            Log.e(getTag(), "Invalid URI: " + uri, e);
         }
     }
 
     protected void startService(byte[] option) {
+        String uri = new String(option);
         try {
-            String uri = new String(option);
             Intent intent = decodeIntent(uri);
             Log.d(getTag(), "startService Intent: " + intent);
             mRouterService.startService(intent);
-        } catch (URISyntaxException e) {
-            Log.e(getTag(), "Invalid URI", e);
+        } catch (Exception e) {
+            Log.e(getTag(), "Invalid URI: " + uri, e);
         }
     }
 
     protected void startActivity(byte[] option) {
+        String uri = new String(option);
         try {
-            String uri = new String(option);
             Intent intent = decodeIntent(uri);
             Log.d(getTag(), "startService Intent: " + intent);
             mRouterService.startActivity(intent);
-        } catch (URISyntaxException e) {
-            Log.e(getTag(), "Invalid URI", e);
+        } catch (Exception e) {
+            Log.e(getTag(), "Invalid URI: " + uri, e);
         }
     }
 
