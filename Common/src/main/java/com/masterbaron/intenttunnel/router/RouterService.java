@@ -233,14 +233,14 @@ public class RouterService extends Service implements Handler.Callback {
     class IncomingHandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
-            Log.e(TAG, "send to service message: " + msg.what);
+            Log.d(TAG, "send to service message: " + msg.what);
             if (msg.what == ROUTER_MESSAGE_BROADCAST_INTENT || msg.what == ROUTER_MESSAGE_STARTSERVICE_INTENT
                     || msg.what == ROUTER_MESSAGE_STARTACTIVITY_INTENT) {
                 if ( msg.obj instanceof  Intent ) {
                     expirePackets();
 
                     Intent intent = (Intent) msg.obj;
-                    Log.e(TAG, "send message: " + intent.toUri(0));
+                    Log.d(TAG, "send message: " + intent.toUri(0));
                     mPackets.add( new Packet(msg.what, intent) );
                     processQueue();
                 }
