@@ -239,6 +239,7 @@ public abstract class Connection extends Handler {
         mOutput = null;
         hasWorkingConnection = false;
         hasOpenConnection = false;
+        System.gc();
     }
 
     /**
