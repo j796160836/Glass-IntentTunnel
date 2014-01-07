@@ -7,8 +7,8 @@ Very unpolished at this point, but proof of concept is working.
 Tunnel Intents over bluetooth.  
 The idea is to have a service app on Glass and the Phone that would handle traffic using intents.  No need for every app developer to write bluetooth connection code.   Developers can simply send intents to the service to have them broadcast on the other side of the bluetooth connection. 
 
-===============================================================================================
-Installation Instructions:
+Intall Instructions
+===================
 
 1. Download the APK [here](https://github.com/TheMasterBaron/Glass-IntentTunnel/blob/master/apk/IntentTunnel-debug-unaligned-0.0.1.apk?raw=true)
 
@@ -25,8 +25,8 @@ Installation Instructions:
 Thanks to https://github.com/KTlab/BluetoothCommunicationLibrary_Android for providing a solid bluetooth library to work off of.
 
 
-===============================================================================================
 Features:
+=========
 * Stays disconnected until needed.
 * Stays connected for 30 seconds after last message is sent incase there is a flurry of traffic.
 * Remaining bound to the router servvice will keep the connection open until all binds to the service are disconnected.  Use this if the 30 seconds is too low of a timeout.
@@ -36,12 +36,12 @@ Features:
 * Added support to also include byte[], string list, and integer list.
 
 
-===============================================================================================
 SAMPLE:
+=======
 Install MusicPusherSample on Glass.  Say "phome music start" or "phone music stop".
 The MusicPusherSample sends "com.android.music.musicservicecommand" intents to the service to have them broadcasted on the phone.  Most music players on the phone respond to these intent allowing control of them.
 
 
-===============================================================================================
-VERSION:
+Change Log:
+===========
 0.0.1: Initial Release
