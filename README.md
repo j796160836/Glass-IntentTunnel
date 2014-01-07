@@ -7,6 +7,8 @@ Very unpolished at this point, but proof of concept is working.
 Tunnel Intents over bluetooth.  
 The idea is to have a service app on Glass and the Phone that would handle traffic using intents.  No need for every app developer to write bluetooth connection code.   Developers can simply send intents to the service to have them broadcast on the other side of the bluetooth connection. 
 
+While, I initially made this for Phone to Glass communication, this tool will work from Phone to Phone as well.
+
 Intall Instructions
 ===================
 
