@@ -9,7 +9,7 @@ The idea is to have a service app on Glass and the Phone that would handle traff
 
 While, I initially made this for Phone to Glass communication, this tool will work from Phone to Phone as well.
 
-Intall Instructions
+Install Instructions
 ===================
 
 1. Download the APK [here](https://github.com/TheMasterBaron/Glass-IntentTunnel/blob/master/apk/IntentTunnel-debug-unaligned-0.0.1.apk?raw=true).  The same APK is for the phone and Glass
