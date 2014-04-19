@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.masterbaron.intenttunnel">
+    package="com.masterbaron.intenttunnel.common">
 
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
@@ -13,9 +13,9 @@
         android:protectionLevel="dangerous" />
     -->
     <application>
-        <service android:name=".router.RouterService"
+        <service android:name="com.masterbaron.intenttunnel.router.RouterService"
             android:exported="true"/> <!-- android:permission="com.masterbaron.intenttunnel.SEND" -->
-        <receiver android:name=".router.ServiceReceiver" >
+        <receiver android:name="com.masterbaron.intenttunnel.router.ServiceReceiver" >
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />

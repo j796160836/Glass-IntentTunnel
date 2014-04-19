@@ -11,7 +11,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import com.masterbaron.intenttunnel.R;
 import com.masterbaron.intenttunnel.router.RouterService;
 
 /**
@@ -42,7 +41,12 @@ public class GlassConfigureActivity extends Activity {
         mPaused = false;
         waitForAction = false;
         showServerState();
-        openOptionsMenu();
+        textView.post(new Runnable() {
+            public void run() {
+                openOptionsMenu();
+            }
+        });
+
     }
 
     @Override

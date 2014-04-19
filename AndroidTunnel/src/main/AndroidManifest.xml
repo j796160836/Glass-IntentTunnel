@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.masterbaron.intenttunnel">
+    package="com.masterbaron.intenttunnel.android">
 
     <uses-sdk
         android:minSdkVersion="9"
@@ -8,10 +8,10 @@
 
     <application>
         <activity
-            android:name=".android.AndroidConfigureActivity">
+            android:name="com.masterbaron.intenttunnel.android.AndroidConfigureActivity">
         </activity>
         <activity
-            android:name=".android.DeviceSelectActivity"
+            android:name="com.masterbaron.intenttunnel.android.DeviceSelectActivity"
             android:label="Select Bluetooth Device">
         </activity>
     </application>

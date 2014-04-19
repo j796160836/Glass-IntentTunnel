@@ -113,8 +113,8 @@ public class RouterService extends Service implements Handler.Callback {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
-            Log.d("onStartCommand", "intent=" + intent.toUri(0));
             if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())) {
+                Log.d("onStartCommand", "intent=" + intent.toUri(0));
                 int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 if (state == BluetoothAdapter.STATE_ON) {
                     mServerService.stopConnection();
@@ -262,7 +262,7 @@ public class RouterService extends Service implements Handler.Callback {
     public static boolean isGlass() {
         if( isGlass == null ) {
             try {
-                RouterService.class.getClassLoader().loadClass("com.google.android.glass.timeline.TimelineManager");
+                RouterService.class.getClassLoader().loadClass("com.google.android.glass.timeline.LiveCard");
                 isGlass = true;
             } catch (Exception e) {
                 isGlass = false;

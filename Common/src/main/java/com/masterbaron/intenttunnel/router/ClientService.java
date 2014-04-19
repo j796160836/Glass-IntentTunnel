@@ -7,7 +7,7 @@ import android.content.SharedPreferences;
 import android.os.Message;
 import android.util.Log;
 
-import com.masterbaron.intenttunnel.R;
+import com.masterbaron.intenttunnel.common.R;
 
 import java.util.Queue;
 import java.util.Set;

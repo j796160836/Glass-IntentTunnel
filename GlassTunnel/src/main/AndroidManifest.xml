@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.masterbaron.intenttunnel">
+    package="com.masterbaron.intenttunnel.glass">
 
     <uses-sdk
         android:minSdkVersion="15"
@@ -8,11 +8,11 @@
 
     <application>
         <activity
-            android:name=".glass.GlassConfigureActivity"
+            android:name="com.masterbaron.intenttunnel.glass.GlassConfigureActivity"
             android:theme="@style/MenuTheme">
         </activity>
         <activity
-            android:name=".glass.DeviceSelectActivity"
+            android:name="com.masterbaron.intenttunnel.glass.DeviceSelectActivity"
             android:label="Select Bluetooth Device">
         </activity>
 

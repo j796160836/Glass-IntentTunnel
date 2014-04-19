@@ -10,7 +10,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import com.masterbaron.intenttunnel.R;
+import com.masterbaron.intenttunnel.android.R;
 import com.masterbaron.intenttunnel.router.RouterService;
 
 public class AndroidConfigureActivity extends Activity {

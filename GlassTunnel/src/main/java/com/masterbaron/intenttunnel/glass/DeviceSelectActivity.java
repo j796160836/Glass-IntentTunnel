@@ -14,7 +14,7 @@ import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import com.masterbaron.intenttunnel.R;
+import com.masterbaron.intenttunnel.glass.R;
 import com.masterbaron.intenttunnel.router.RouterService;
 
 import java.util.ArrayList;
@@ -44,9 +44,13 @@ public class DeviceSelectActivity extends Activity {
         if (deviceNames.size() == 0) {
             Toast.makeText(this, "Unable to locate and Bluetooth Devices", Toast.LENGTH_SHORT).show();
             this.finish();
-        } else {
-            openOptionsMenu();
         }
+    }
+
+    @Override
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        openOptionsMenu();
     }
 
     @Override

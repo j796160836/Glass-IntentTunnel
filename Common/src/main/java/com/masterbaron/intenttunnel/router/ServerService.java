@@ -3,7 +3,7 @@ package com.masterbaron.intenttunnel.router;
 import android.bluetooth.BluetoothAdapter;
 import android.os.Message;
 
-import com.masterbaron.intenttunnel.R;
+import com.masterbaron.intenttunnel.common.R;
 
 import java.util.Queue;
 import java.util.UUID;
