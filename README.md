@@ -12,7 +12,7 @@ While, I initially made this for Phone to Glass communication, this tool will wo
 Install Instructions
 ===================
 
-1. Download the APK [here](https://github.com/TheMasterBaron/Glass-IntentTunnel/blob/master/apk/IntentTunnel-debug-unaligned-0.0.1.apk?raw=true).  The same APK is for the phone and Glass
+1. Download the APK [here](https://github.com/TheMasterBaron/Glass-IntentTunnel/releases).  The same APK is for the phone and Glass
 
 2. Intall the APK on you Phone and run IntentTunnel.  Press menu and choose Select BT Device.  Then select your Glass BT Device from the list.  Press Menu again and select Start to start the router (If it's not already started)
 
